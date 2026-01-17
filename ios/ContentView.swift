@@ -10,7 +10,6 @@ struct ContentView: View {
     @State private var placedEmojis: [PlacedEmoji] = []
     @State private var recentEmojis: [String] = ["😀", "😎", "🥳", "❤️", "🎨"]
     @State private var emojiFieldValue: String = ""
-    @State private var draggedEmoji: String?
     @FocusState private var isEmojiFieldFocused: Bool
 
     var body: some View {
