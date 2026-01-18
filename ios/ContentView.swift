@@ -12,6 +12,24 @@ struct DragState {
     let emoji: String
     // TODO: say which coordinate system this position is in
     let position: CGPoint
+
+    let secondTouchInitialOffset: CGPoint?
+
+    func with(position: CGPoint) -> DragState {
+        return DragState(
+            emoji: emoji,
+            position: position,
+            secondTouchInitialOffset: secondTouchInitialOffset
+        )
+    }
+
+    func with(secondTouchInitialOffset: CGPoint?) -> DragState {
+        return DragState(
+            emoji: emoji,
+            position: position,
+            secondTouchInitialOffset: secondTouchInitialOffset
+        )
+    }
 }
 
 struct ContentView: View {
@@ -27,9 +45,16 @@ struct ContentView: View {
     private func makeDragGesture(emoji: String) -> some Gesture {
         DragGesture(minimumDistance: 10, coordinateSpace: .global).onChanged {
             value in
-            dragState = DragState(emoji: emoji, position: value.location)
+            guard let dragState else {
+                dragState = DragState(
+                    emoji: emoji,
+                    position: value.location,
+                    secondTouchInitialOffset: nil
+                )
+                return
+            }
+            self.dragState = dragState.with(position: value.location)
         }.onEnded { value in
-            NSLog("Drag ended \(value)")
             guard let dragState = self.dragState else { return }
             if canvasFrame.contains(dragState.position) {
                 let newEmoji = PlacedEmoji(
@@ -43,14 +68,28 @@ struct ContentView: View {
             }
 
             self.dragState = nil
-        }
+        }.simultaneously(
+            with: DragGesture(minimumDistance: 10, coordinateSpace: .global)
+                .onChanged { value in
+                    guard let dragState else { return }
+                    guard let initialOffset = dragState.secondTouchInitialOffset
+                    else {
+                        self.dragState = dragState.with(secondTouchInitialOffset: value.startLocation - dragState.position)
+                        return
+                    }
+                }.onEnded {
+                    _ in
+                    guard let dragState else { return }
+                    self.dragState = dragState.with(secondTouchInitialOffset: nil)
+                }
+        )
     }
 
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
                 Text("Drag state \(String(describing: dragState))")
-                
+
                 ZStack {
                     RoundedRectangle(cornerRadius: 20)
                         .fill(Color.white)
@@ -176,6 +215,12 @@ struct CanvasFramePreferenceKey: PreferenceKey {
 
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
         value = nextValue()
+    }
+}
+
+extension CGPoint {
+    static func - (lhs: CGPoint, rhs: CGPoint) -> CGPoint {
+        return CGPoint(x: lhs.x - rhs.x, y: lhs.y - rhs.y)
     }
 }
 
