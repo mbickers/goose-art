@@ -1,24 +1,5 @@
 import SwiftUI
 
-struct Emoji: Equatable, Hashable {
-    let value: Character
-
-    init?(_ value: Character) {
-        guard value.isEmoji else { return nil }
-        self.value = value
-    }
-
-    var stringValue: String { String(value) }
-}
-
-extension Character {
-    var isEmoji: Bool {
-        guard let firstScalar = unicodeScalars.first else { return false }
-        return firstScalar.properties.isEmojiPresentation
-            || (unicodeScalars.count > 1 && firstScalar.properties.isEmoji)
-    }
-}
-
 struct PlacedEmoji: Identifiable {
     let id = UUID()
     let emoji: Emoji
@@ -325,23 +306,6 @@ struct CanvasFramePreferenceKey: PreferenceKey {
 
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
         value = nextValue()
-    }
-}
-
-// TODO: move to new file
-extension Comparable {
-    func clamped(to limits: ClosedRange<Self>) -> Self {
-        return min(max(self, limits.lowerBound), limits.upperBound)
-    }
-}
-
-extension CGPoint {
-    static func - (lhs: CGPoint, rhs: CGPoint) -> CGPoint {
-        return CGPoint(x: lhs.x - rhs.x, y: lhs.y - rhs.y)
-    }
-
-    func norm() -> CGFloat {
-        return sqrt(x * x + y * y)
     }
 }
 
