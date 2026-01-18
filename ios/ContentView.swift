@@ -8,26 +8,46 @@ struct PlacedEmoji: Identifiable {
     var rotation: Angle = .zero
 }
 
+struct SecondTouchState {
+    let initialOffset: CGPoint
+    let baseScale: CGFloat
+}
+
+// TODO: fix offset/size when dropping
+// TODO: store size instead of scale (at least, be consistent about units everywhere). Choose units for size in canvas and DragState
+
 struct DragState {
     let emoji: String
     // TODO: say which coordinate system this position is in
     let position: CGPoint
+    let scale: CGFloat
 
-    let secondTouchInitialOffset: CGPoint?
+    let secondTouchState: SecondTouchState?
 
     func with(position: CGPoint) -> DragState {
         return DragState(
             emoji: emoji,
             position: position,
-            secondTouchInitialOffset: secondTouchInitialOffset
+            scale: scale,
+            secondTouchState: secondTouchState
         )
     }
 
-    func with(secondTouchInitialOffset: CGPoint?) -> DragState {
+    func with(secondTouchState: SecondTouchState?) -> DragState {
         return DragState(
             emoji: emoji,
             position: position,
-            secondTouchInitialOffset: secondTouchInitialOffset
+            scale: scale,
+            secondTouchState: secondTouchState
+        )
+    }
+
+    func with(scale: CGFloat) -> DragState {
+        return DragState(
+            emoji: emoji,
+            position: position,
+            scale: scale,
+            secondTouchState: secondTouchState
         )
     }
 }
@@ -49,7 +69,8 @@ struct ContentView: View {
                 dragState = DragState(
                     emoji: emoji,
                     position: value.location,
-                    secondTouchInitialOffset: nil
+                    scale: 1.0,
+                    secondTouchState: nil
                 )
                 return
             }
@@ -60,7 +81,7 @@ struct ContentView: View {
                 let newEmoji = PlacedEmoji(
                     emoji: emoji,
                     position: dragState.position,
-                    scale: 1.0,
+                    scale: dragState.scale,
                     rotation: Angle(degrees: 0.0)
                 )
                 placedEmojis.append(newEmoji)
@@ -68,21 +89,7 @@ struct ContentView: View {
             }
 
             self.dragState = nil
-        }.simultaneously(
-            with: DragGesture(minimumDistance: 10, coordinateSpace: .global)
-                .onChanged { value in
-                    guard let dragState else { return }
-                    guard let initialOffset = dragState.secondTouchInitialOffset
-                    else {
-                        self.dragState = dragState.with(secondTouchInitialOffset: value.startLocation - dragState.position)
-                        return
-                    }
-                }.onEnded {
-                    _ in
-                    guard let dragState else { return }
-                    self.dragState = dragState.with(secondTouchInitialOffset: nil)
-                }
-        )
+        }
     }
 
     var body: some View {
@@ -186,8 +193,63 @@ struct ContentView: View {
             }
 
             if let dragState = dragState {
+                Color.blue
+                    .opacity(0.3)
+                    .frame(
+                        minWidth: 0,
+                        maxWidth: .infinity,
+                        minHeight: 0,
+                        maxHeight: .infinity
+                    )
+                    .gesture(
+                        DragGesture(
+                            minimumDistance: 10,
+                            coordinateSpace: .global
+                        )
+                        .onChanged { value in
+                            guard
+                                let secondTouchState = dragState
+                                    .secondTouchState
+                            else {
+                                self.dragState = dragState.with(
+                                    secondTouchState: SecondTouchState(
+                                        initialOffset: value.startLocation
+                                            - dragState.position,
+                                        baseScale: dragState.scale
+                                    )
+                                )
+                                return
+                            }
+
+                            let currentOffset =
+                                value.location - dragState.position
+                            let clampedInitialOffsetNorm = max(
+                                secondTouchState.initialOffset
+                                    .norm(),
+                                1
+                            )
+                            let clampedScale =
+                                (secondTouchState.baseScale
+                                * currentOffset.norm()
+                                / clampedInitialOffsetNorm).clamped(
+                                    // TODO: factor out constants
+                                    to: 0.05...10
+                                )
+                            self.dragState = dragState.with(
+                                scale: clampedScale
+                            )
+                        }.onEnded {
+                            _ in
+                            self.dragState = dragState.with(
+                                secondTouchState: nil
+                            )
+                        }
+
+                    )
+
                 Text(dragState.emoji)
-                    .font(.system(size: 60))
+                    // TODO factor out shared code for drawing emojis in preview/recent bar/canvas
+                    .font(.system(size: 60 * dragState.scale))
                     .position(dragState.position)
                     .allowsHitTesting(false)
             }
@@ -218,9 +280,19 @@ struct CanvasFramePreferenceKey: PreferenceKey {
     }
 }
 
+extension Comparable {
+    func clamped(to limits: ClosedRange<Self>) -> Self {
+        return min(max(self, limits.lowerBound), limits.upperBound)
+    }
+}
+
 extension CGPoint {
     static func - (lhs: CGPoint, rhs: CGPoint) -> CGPoint {
         return CGPoint(x: lhs.x - rhs.x, y: lhs.y - rhs.y)
+    }
+
+    func norm() -> CGFloat {
+        return sqrt(x * x + y * y)
     }
 }
 
