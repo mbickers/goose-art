@@ -2,10 +2,10 @@ import SwiftUI
 
 struct PlacedEmoji: Identifiable {
     let id = UUID()
-    var emoji: String
-    var position: CGPoint
-    var scale: CGFloat = 1.0
-    var rotation: Angle = .zero
+    let emoji: String
+    let position: CGPoint
+    let scale: CGFloat
+    let rotation: Angle
 }
 
 struct SecondTouchState {
@@ -13,7 +13,6 @@ struct SecondTouchState {
     let baseScale: CGFloat
 }
 
-// TODO: fix dragging from text editor
 // TODO: fix offset/size when dropping
 // TODO: store size instead of scale (at least, be consistent about units everywhere). Choose units for size in canvas and DragState
 
@@ -270,7 +269,7 @@ struct ContentView: View {
                     )
 
                 Text(dragState.emoji)
-                    // TODO factor out shared code for drawing emojis in preview/recent bar/canvas
+                    // TODO: factor out shared code for drawing emojis in preview/recent bar/canvas
                     .font(.system(size: 60 * dragState.scale))
                     .position(dragState.position)
                     .allowsHitTesting(false)
@@ -287,9 +286,6 @@ struct ContentView: View {
         if emojiFieldValue == emoji {
             emojiFieldValue = ""
         }
-    }
-
-    private func handleDrop(at location: CGPoint) {
     }
 }
 
