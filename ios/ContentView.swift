@@ -4,13 +4,19 @@ struct Emoji: Equatable, Hashable {
     let value: Character
 
     init?(_ value: Character) {
-        guard value.unicodeScalars.first?.properties.isEmoji ?? false else {
-            return nil
-        }
+        guard value.isEmoji else { return nil }
         self.value = value
     }
-    
-    var stringValue: String {String(value)}
+
+    var stringValue: String { String(value) }
+}
+
+extension Character {
+    var isEmoji: Bool {
+        guard let firstScalar = unicodeScalars.first else { return false }
+        return firstScalar.properties.isEmojiPresentation
+            || (unicodeScalars.count > 1 && firstScalar.properties.isEmoji)
+    }
 }
 
 struct PlacedEmoji: Identifiable {
@@ -182,14 +188,21 @@ struct ContentView: View {
                                 .multilineTextAlignment(.center)
                                 .frame(width: 60, height: 60)
                                 .onChange(of: emojiFieldValue) {
-                                    oldValue, newValue
+                                    oldValue,
+                                    newValue
                                     in
-                                    emojiFieldValue = lastEmojiInString(newValue)?.stringValue ?? ""
+                                    emojiFieldValue =
+                                        lastEmojiInString(newValue)?.stringValue
+                                        ?? ""
                                 }
                                 .onChange(of: emojiFieldFocused) {
                                     oldValue,
                                     isFocused in
-                                    if !isFocused, let emoji = lastEmojiInString(emojiFieldValue) {
+                                    if !isFocused,
+                                        let emoji = lastEmojiInString(
+                                            emojiFieldValue
+                                        )
+                                    {
                                         addToRecents(emoji)
                                     }
                                     emojiFieldValue = ""
@@ -200,7 +213,9 @@ struct ContentView: View {
                                 // - using .gesture, including sequencing with LongPressGesture (never triggered)
                                 // - highPriorityGesture (both drag and text selection interaction would happen, which was messy experience), same thing with LongPressGesturee
                                 // - trying to disable hit testing on TextField, didn't work
-                                if let emoji = lastEmojiInString(emojiFieldValue),
+                                if let emoji = lastEmojiInString(
+                                    emojiFieldValue
+                                ),
                                     emojiFieldFocused
                                 {
                                     Color.clear
