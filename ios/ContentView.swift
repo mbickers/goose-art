@@ -10,7 +10,6 @@ struct ContentView: View {
     @State private var placedEmojis: [PlacedEmoji] = []
     @State private var recentEmojis: [String] = ["😀", "😎", "🥳", "❤️", "🎨"]
     @State private var emojiFieldValue: String = ""
-    @FocusState private var isEmojiFieldFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -65,7 +64,6 @@ struct ContentView: View {
                             )
                             .multilineTextAlignment(.center)
                             .frame(width: 60, height: 60)
-                            .focused($isEmojiFieldFocused)
                             .onChange(of: emojiFieldValue) {
                                 oldValue,
                                 newValue in
