@@ -1,8 +1,21 @@
 import SwiftUI
 
+struct Emoji: Equatable, Hashable {
+    let value: Character
+
+    init?(_ value: Character) {
+        guard value.unicodeScalars.first?.properties.isEmoji ?? false else {
+            return nil
+        }
+        self.value = value
+    }
+    
+    var stringValue: String {String(value)}
+}
+
 struct PlacedEmoji: Identifiable {
     let id = UUID()
-    let emoji: String
+    let emoji: Emoji
     let position: CGPoint
     let scale: CGFloat
     let rotation: Angle
@@ -17,7 +30,7 @@ struct SecondTouchState {
 // TODO: store size instead of scale (at least, be consistent about units everywhere). Choose units for size in canvas and DragState
 
 struct DragState {
-    let emoji: String
+    let emoji: Emoji
     // TODO: say which coordinate system this position is in
     let position: CGPoint
     let scale: CGFloat
@@ -52,9 +65,15 @@ struct DragState {
     }
 }
 
+func lastEmojiInString(_ string: String) -> Emoji? {
+    return string.compactMap { Emoji($0) }.last
+}
+
 struct ContentView: View {
     @State private var placedEmojis: [PlacedEmoji] = []
-    @State private var recentEmojis: [String] = ["😀", "😎", "🥳", "❤️", "🎨"]
+    @State private var recentEmojis: [Emoji] = ["😀", "😎", "🥳", "❤️", "🎨"].map {
+        Emoji($0)!
+    }
     @State private var emojiFieldValue: String = ""
     @FocusState private var emojiFieldFocused: Bool
 
@@ -63,7 +82,7 @@ struct ContentView: View {
     // TODO: this is probably bad way to deal with geometry checking
     @State private var canvasFrame: CGRect = .zero
 
-    private func makeDragGesture(emoji: String) -> some Gesture {
+    private func makeDragGesture(emoji: Emoji) -> some Gesture {
         DragGesture(minimumDistance: 10, coordinateSpace: .global).onChanged {
             value in
             guard let dragState else {
@@ -109,7 +128,7 @@ struct ContentView: View {
                         )
 
                     ForEach(placedEmojis) { placedEmoji in
-                        Text(placedEmoji.emoji)
+                        Text(placedEmoji.emoji.stringValue)
                             .font(.system(size: 50 * placedEmoji.scale))
                             .rotationEffect(placedEmoji.rotation)
                             .position(placedEmoji.position)
@@ -163,42 +182,38 @@ struct ContentView: View {
                                 .multilineTextAlignment(.center)
                                 .frame(width: 60, height: 60)
                                 .onChange(of: emojiFieldValue) {
-                                    oldValue,
-                                    newValue in
-                                    // TODO: better validation (don't allow normal strings)
-                                    if let lastChar = newValue.last {
-                                        emojiFieldValue = String(lastChar)
-                                    }
+                                    oldValue, newValue
+                                    in
+                                    emojiFieldValue = lastEmojiInString(newValue)?.stringValue ?? ""
                                 }
                                 .onChange(of: emojiFieldFocused) {
                                     oldValue,
                                     isFocused in
-                                    if !isFocused {
-                                        // TODO: better validation (don't allow passing nothing)
-                                        addToRecents(emojiFieldValue)
+                                    if !isFocused, let emoji = lastEmojiInString(emojiFieldValue) {
+                                        addToRecents(emoji)
                                     }
+                                    emojiFieldValue = ""
                                 }
                                 .background(background)
-                                
+
                                 // Using hacky ZStack because attaching the gesture directly to the TextField interacted badly with TextField interactions. Tried
                                 // - using .gesture, including sequencing with LongPressGesture (never triggered)
                                 // - highPriorityGesture (both drag and text selection interaction would happen, which was messy experience), same thing with LongPressGesturee
                                 // - trying to disable hit testing on TextField, didn't work
-                                if !emojiFieldValue.isEmpty && emojiFieldFocused
+                                if let emoji = lastEmojiInString(emojiFieldValue),
+                                    emojiFieldFocused
                                 {
                                     Color.clear
                                         .contentShape(Rectangle())
                                         .frame(width: 60, height: 60)
                                         .gesture(
-                                            makeDragGesture(
-                                                emoji: emojiFieldValue
-                                            )
+                                            makeDragGesture(emoji: emoji)
                                         )
                                 }
                             }
 
                             ForEach(recentEmojis, id: \.self) { emoji in
-                                Text(emoji)
+                                Text(emoji.stringValue)
                                     .frame(width: 60, height: 60)
                                     .background(background)
                                     .gesture(
@@ -268,7 +283,7 @@ struct ContentView: View {
 
                     )
 
-                Text(dragState.emoji)
+                Text(dragState.emoji.stringValue)
                     // TODO: factor out shared code for drawing emojis in preview/recent bar/canvas
                     .font(.system(size: 60 * dragState.scale))
                     .position(dragState.position)
@@ -277,13 +292,13 @@ struct ContentView: View {
         }
     }
 
-    private func addToRecents(_ emoji: String) {
+    private func addToRecents(_ emoji: Emoji) {
         recentEmojis.removeAll { $0 == emoji }
         recentEmojis.insert(emoji, at: 0)
         if recentEmojis.count > 10 {
             recentEmojis = Array(recentEmojis.prefix(10))
         }
-        if emojiFieldValue == emoji {
+        if lastEmojiInString(emojiFieldValue) == emoji {
             emojiFieldValue = ""
         }
     }
