@@ -108,8 +108,6 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
-                Text("Drag state \(String(describing: dragState))")
-
                 ZStack {
                     RoundedRectangle(cornerRadius: 20)
                         .fill(Color.white)
@@ -125,6 +123,13 @@ struct ContentView: View {
                             .font(.system(size: 50 * placedEmoji.scale))
                             .rotationEffect(placedEmoji.rotation)
                             .position(placedEmoji.position)
+                    }
+                    
+                    VStack {
+                        Text("Drag state \(String(describing: dragState))")
+                            .foregroundColor(.black)
+                        
+                        Spacer()
                     }
                 }
                 .frame(maxWidth: .infinity)
