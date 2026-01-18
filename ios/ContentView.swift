@@ -11,6 +11,7 @@ struct PlacedEmoji: Identifiable {
 struct SecondTouchState {
     let initialOffset: CGPoint
     let baseScale: CGFloat
+    let baseRotation: Angle
 }
 
 // TODO: fix offset/size when dropping
@@ -21,6 +22,7 @@ struct DragState {
     // TODO: say which coordinate system this position is in
     let position: CGPoint
     let scale: CGFloat
+    let rotation: Angle
 
     let secondTouchState: SecondTouchState?
 
@@ -29,6 +31,7 @@ struct DragState {
             emoji: emoji,
             position: position,
             scale: scale,
+            rotation: rotation,
             secondTouchState: secondTouchState
         )
     }
@@ -38,15 +41,17 @@ struct DragState {
             emoji: emoji,
             position: position,
             scale: scale,
+            rotation: rotation,
             secondTouchState: secondTouchState
         )
     }
 
-    func with(scale: CGFloat) -> DragState {
+    func with(scale: CGFloat, rotation: Angle) -> DragState {
         return DragState(
             emoji: emoji,
             position: position,
             scale: scale,
+            rotation: rotation,
             secondTouchState: secondTouchState
         )
     }
@@ -77,6 +82,7 @@ struct ContentView: View {
                     emoji: emoji,
                     position: value.location,
                     scale: 1.0,
+                    rotation: Angle(degrees: 0),
                     secondTouchState: nil
                 )
                 return
@@ -89,7 +95,7 @@ struct ContentView: View {
                     emoji: emoji,
                     position: dragState.position,
                     scale: dragState.scale,
-                    rotation: Angle(degrees: 0.0)
+                    rotation: dragState.rotation
                 )
                 placedEmojis.append(newEmoji)
                 addToRecents(emoji)
@@ -247,7 +253,8 @@ struct ContentView: View {
                                     secondTouchState: SecondTouchState(
                                         initialOffset: value.startLocation
                                             - dragState.position,
-                                        baseScale: dragState.scale
+                                        baseScale: dragState.scale,
+                                        baseRotation: dragState.rotation
                                     )
                                 )
                                 return
@@ -255,6 +262,7 @@ struct ContentView: View {
 
                             let currentOffset =
                                 value.location - dragState.position
+                            
                             let clampedInitialOffsetNorm = max(
                                 secondTouchState.initialOffset
                                     .norm(),
@@ -267,8 +275,15 @@ struct ContentView: View {
                                     // TODO: factor out constants
                                     to: 0.05...10
                                 )
+                            
+                            let initialAngle = secondTouchState.initialOffset.angle()
+                            let currentAngle = currentOffset.angle()
+                            let rotationDelta = currentAngle - initialAngle
+                            let newRotation = secondTouchState.baseRotation + Angle(radians: rotationDelta)
+                            
                             self.dragState = dragState.with(
-                                scale: clampedScale
+                                scale: clampedScale,
+                                rotation: newRotation
                             )
                         }.onEnded {
                             _ in
@@ -282,6 +297,7 @@ struct ContentView: View {
                 Text(dragState.emoji.stringValue)
                     // TODO: factor out shared code for drawing emojis in preview/recent bar/canvas
                     .font(.system(size: 60 * dragState.scale))
+                    .rotationEffect(dragState.rotation)
                     .position(dragState.position)
                     .allowsHitTesting(false)
             }

@@ -8,5 +8,9 @@ extension CGPoint {
     func norm() -> CGFloat {
         return sqrt(x * x + y * y)
     }
+
+    func angle() -> CGFloat {
+        return atan2(y, x)
+    }
 }
 
