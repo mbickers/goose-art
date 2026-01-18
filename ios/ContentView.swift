@@ -13,6 +13,7 @@ struct SecondTouchState {
     let baseScale: CGFloat
 }
 
+// TODO: fix dragging from text editor
 // TODO: fix offset/size when dropping
 // TODO: store size instead of scale (at least, be consistent about units everywhere). Choose units for size in canvas and DragState
 
@@ -56,6 +57,7 @@ struct ContentView: View {
     @State private var placedEmojis: [PlacedEmoji] = []
     @State private var recentEmojis: [String] = ["😀", "😎", "🥳", "❤️", "🎨"]
     @State private var emojiFieldValue: String = ""
+    @FocusState private var emojiFieldFocused: Bool
 
     @State private var dragState: DragState? = nil
 
@@ -158,21 +160,41 @@ struct ContentView: View {
                                     text: $emojiFieldValue,
                                     prompt: Text("+")
                                 )
+                                .focused($emojiFieldFocused)
                                 .multilineTextAlignment(.center)
                                 .frame(width: 60, height: 60)
                                 .onChange(of: emojiFieldValue) {
                                     oldValue,
                                     newValue in
+                                    // TODO: better validation (don't allow normal strings)
                                     if let lastChar = newValue.last {
                                         emojiFieldValue = String(lastChar)
                                     }
                                 }
+                                .onChange(of: emojiFieldFocused) {
+                                    oldValue,
+                                    isFocused in
+                                    if !isFocused {
+                                        // TODO: better validation (don't allow passing nothing)
+                                        addToRecents(emojiFieldValue)
+                                    }
+                                }
                                 .background(background)
-
-                                if !emojiFieldValue.isEmpty {
+                                
+                                // Using hacky ZStack because attaching the gesture directly to the TextField interacted badly with TextField interactions. Tried
+                                // - using .gesture, including sequencing with LongPressGesture (never triggered)
+                                // - highPriorityGesture (both drag and text selection interaction would happen, which was messy experience), same thing with LongPressGesturee
+                                // - trying to disable hit testing on TextField, didn't work
+                                if !emojiFieldValue.isEmpty && emojiFieldFocused
+                                {
                                     Color.clear
                                         .contentShape(Rectangle())
                                         .frame(width: 60, height: 60)
+                                        .gesture(
+                                            makeDragGesture(
+                                                emoji: emojiFieldValue
+                                            )
+                                        )
                                 }
                             }
 
@@ -280,6 +302,7 @@ struct CanvasFramePreferenceKey: PreferenceKey {
     }
 }
 
+// TODO: move to new file
 extension Comparable {
     func clamped(to limits: ClosedRange<Self>) -> Self {
         return min(max(self, limits.lowerBound), limits.upperBound)
