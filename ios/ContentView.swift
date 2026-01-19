@@ -63,7 +63,7 @@ func lastEmojiInString(_ string: String) -> Emoji? {
 
 struct ContentView: View {
     @State private var placedEmojis: [PlacedEmoji] = []
-    @State private var recentEmojis: [Emoji] = ["😀", "😎", "🥳", "❤️", "🎨"].map {
+    @State private var recentEmojis: [Emoji] = ["🦆", "❤️", "🪿"].map {
         Emoji($0)!
     }
     @State private var emojiFieldValue: String = ""
@@ -124,11 +124,11 @@ struct ContentView: View {
                             .rotationEffect(placedEmoji.rotation)
                             .position(placedEmoji.position)
                     }
-                    
+
                     VStack {
                         Text("Drag state \(String(describing: dragState))")
                             .foregroundColor(.black)
-                        
+
                         Spacer()
                     }
                 }
@@ -150,16 +150,6 @@ struct ContentView: View {
                 )
                 .coordinateSpace(name: "canvas")
 
-                Button(role: .destructive) {
-                    placedEmojis.removeAll()
-                } label: {
-                    Label("Clear Canvas", systemImage: "trash")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .padding(.horizontal)
-                .padding(.bottom, 10)
-
                 Spacer()
 
                 VStack(spacing: 0) {
@@ -177,6 +167,7 @@ struct ContentView: View {
                                     prompt: Text("+")
                                 )
                                 .focused($emojiFieldFocused)
+                                .onAppear { emojiFieldFocused = true }
                                 .multilineTextAlignment(.center)
                                 .frame(width: 60, height: 60)
                                 .onChange(of: emojiFieldValue) {
@@ -267,7 +258,7 @@ struct ContentView: View {
 
                             let currentOffset =
                                 value.location - dragState.position
-                            
+
                             let clampedInitialOffsetNorm = max(
                                 secondTouchState.initialOffset
                                     .norm(),
@@ -275,17 +266,20 @@ struct ContentView: View {
                             )
                             let clampedScale =
                                 (secondTouchState.baseScale
-                                * currentOffset.norm()
+                                * 1.5 * currentOffset.norm()
                                 / clampedInitialOffsetNorm).clamped(
                                     // TODO: factor out constants
                                     to: 0.05...10
                                 )
-                            
-                            let initialAngle = secondTouchState.initialOffset.angle()
+
+                            let initialAngle = secondTouchState.initialOffset
+                                .angle()
                             let currentAngle = currentOffset.angle()
                             let rotationDelta = currentAngle - initialAngle
-                            let newRotation = secondTouchState.baseRotation + Angle(radians: rotationDelta)
-                            
+                            let newRotation =
+                                secondTouchState.baseRotation
+                                + Angle(radians: rotationDelta)
+
                             self.dragState = dragState.with(
                                 scale: clampedScale,
                                 rotation: newRotation
