@@ -367,6 +367,7 @@ struct ContentView: View {
                     .background(Color.yellow.opacity(0.3))
                     .rotationEffect(dragState.placement.rotation)
                     .position(dragState.placement.position)
+                    // TODO: maybe there is a modifier that makes position ignore safe area, because I think that is current problem
                     .allowsHitTesting(false)
             }
         }.background(purple)
