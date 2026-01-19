@@ -83,6 +83,8 @@ struct RoundedBorder: ViewModifier {
     }
 }
 
+let buttonBorder = RoundedBorder(cornerRadius: 20, lineWidth: 6)
+
 struct EmojiButton: ViewModifier {
     let color: Color
     func body(content: Content) -> some View {
@@ -90,12 +92,7 @@ struct EmojiButton: ViewModifier {
             .font(.system(size: 40))
             .frame(width: 60, height: 60)
             .background(color)
-            .modifier(
-                RoundedBorder(
-                    cornerRadius: 20,
-                    lineWidth: 6
-                )
-            )
+            .modifier(buttonBorder)
     }
 }
 
@@ -134,6 +131,8 @@ struct Debug: View {
             .foregroundColor(.black)
     }
 }
+
+private let buttonIconColor = darkPurple.opacity(0.5)
 
 struct ContentView: View {
     @State private var placedEmojis: [Placement] = [
@@ -198,7 +197,9 @@ struct ContentView: View {
             self.activePlacementState = nil
         }
 
-        return LongPressGesture().sequenced(before: dragGesture)
+        return LongPressGesture(minimumDuration: 0.2).sequenced(
+            before: dragGesture
+        )
     }
 
     private var secondTouchGesture: some Gesture {
@@ -277,6 +278,8 @@ struct ContentView: View {
                 "",
                 text: $emojiFieldValue,
                 prompt: Text("+")
+                    .font(.system(size: 40, weight: .regular))
+                    .foregroundColor(buttonIconColor)
             )
             .focused($emojiFieldFocused)
             .onAppear { emojiFieldFocused = true }
@@ -366,6 +369,26 @@ struct ContentView: View {
                     secondTouchGesture,
                     isEnabled: activePlacementState != nil
                 )
+
+                HStack(spacing: 10) {
+                    let button = { (icon: String) in
+                        Button(action: {}) {
+                            Image(systemName: icon)
+                                .font(.system(size: 20, weight: .heavy))
+                                .foregroundColor(buttonIconColor)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 40)
+                                .background(yellow)
+                                .modifier(buttonBorder)
+                        }
+                    }
+
+                    button("arrow.uturn.backward")
+                    button(
+                        "arrow.left.and.right.righttriangle.left.righttriangle.right"
+                    )
+                    button("gearshape")
+                }
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack {
