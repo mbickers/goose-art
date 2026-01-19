@@ -61,6 +61,27 @@ func lastEmojiInString(_ string: String) -> Emoji? {
     return string.compactMap { Emoji($0) }.last
 }
 
+let blue = Color(hex: "8DE8E8")
+let darkPurple = Color(hex: "2A053E")
+let purple = Color(hex: "3D3E5A")
+let yellow = Color(hex: "F4C77F")
+let pink = Color(hex: "E8A5B3")
+
+struct RoundedBorder: ViewModifier {
+    let cornerRadius: CGFloat
+    let lineWidth: CGFloat
+    
+    func body(content: Content) -> some View {
+        content
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .stroke(darkPurple, lineWidth: lineWidth)
+            )
+            .padding(lineWidth / 2)
+    }
+}
+
 struct ContentView: View {
     @State private var placedEmojis: [PlacedEmoji] = []
     @State private var recentEmojis: [Emoji] = ["🦆", "❤️", "🪿"].map {
@@ -109,14 +130,8 @@ struct ContentView: View {
         ZStack {
             VStack(spacing: 0) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(Color.white)
-                        .shadow(
-                            color: .black.opacity(0.1),
-                            radius: 10,
-                            x: 0,
-                            y: 5
-                        )
+                    Rectangle()
+                        .fill(blue)
 
                     ForEach(placedEmojis) { placedEmoji in
                         Text(placedEmoji.emoji.stringValue)
@@ -132,9 +147,9 @@ struct ContentView: View {
                         Spacer()
                     }
                 }
+                .modifier(RoundedBorder(cornerRadius: 20, lineWidth: 6))
                 .frame(maxWidth: .infinity)
                 .aspectRatio(1, contentMode: .fit)
-                .padding()
                 .overlay(
                     GeometryReader { geometry in
                         Color.clear
@@ -150,80 +165,72 @@ struct ContentView: View {
                 )
                 .coordinateSpace(name: "canvas")
 
-                Spacer()
-
-                VStack(spacing: 0) {
-                    Divider()
-
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 12) {
-                            let background = RoundedRectangle(cornerRadius: 10)
-                                .fill(Color.gray.opacity(0.1))
-
-                            ZStack {
-                                TextField(
-                                    "",
-                                    text: $emojiFieldValue,
-                                    prompt: Text("+")
-                                )
-                                .focused($emojiFieldFocused)
-                                .onAppear { emojiFieldFocused = true }
-                                .multilineTextAlignment(.center)
-                                .frame(width: 60, height: 60)
-                                .onChange(of: emojiFieldValue) {
-                                    oldValue,
-                                    newValue
-                                    in
-                                    emojiFieldValue =
-                                        lastEmojiInString(newValue)?.stringValue
-                                        ?? ""
-                                }
-                                .onChange(of: emojiFieldFocused) {
-                                    oldValue,
-                                    isFocused in
-                                    if !isFocused,
-                                        let emoji = lastEmojiInString(
-                                            emojiFieldValue
-                                        )
-                                    {
-                                        addToRecents(emoji)
-                                    }
-                                    emojiFieldValue = ""
-                                }
-                                .background(background)
-
-                                // Using hacky ZStack because attaching the gesture directly to the TextField interacted badly with TextField interactions. Tried
-                                // - using .gesture, including sequencing with LongPressGesture (never triggered)
-                                // - highPriorityGesture (both drag and text selection interaction would happen, which was messy experience), same thing with LongPressGesturee
-                                // - trying to disable hit testing on TextField, didn't work
-                                if let emoji = lastEmojiInString(
-                                    emojiFieldValue
-                                ),
-                                    emojiFieldFocused
-                                {
-                                    Color.clear
-                                        .contentShape(Rectangle())
-                                        .frame(width: 60, height: 60)
-                                        .gesture(
-                                            makeDragGesture(emoji: emoji)
-                                        )
-                                }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack {
+                        ZStack {
+                            TextField(
+                                "",
+                                text: $emojiFieldValue,
+                                prompt: Text("+")
+                            )
+                            .focused($emojiFieldFocused)
+                            .onAppear { emojiFieldFocused = true }
+                            .multilineTextAlignment(.center)
+                            .frame(width: 60, height: 60)
+                            .onChange(of: emojiFieldValue) {
+                                oldValue,
+                                newValue
+                                in
+                                emojiFieldValue =
+                                    lastEmojiInString(newValue)?.stringValue
+                                    ?? ""
                             }
+                            .onChange(of: emojiFieldFocused) {
+                                oldValue,
+                                isFocused in
+                                if !isFocused,
+                                    let emoji = lastEmojiInString(
+                                        emojiFieldValue
+                                    )
+                                {
+                                    addToRecents(emoji)
+                                }
+                                emojiFieldValue = ""
+                            }
+                            .background(yellow)
 
-                            ForEach(recentEmojis, id: \.self) { emoji in
-                                Text(emoji.stringValue)
+                            // Using hacky ZStack because attaching the gesture directly to the TextField interacted badly with TextField interactions. Tried
+                            // - using .gesture, including sequencing with LongPressGesture (never triggered)
+                            // - highPriorityGesture (both drag and text selection interaction would happen, which was messy experience), same thing with LongPressGesturee
+                            // - trying to disable hit testing on TextField, didn't work
+                            if let emoji = lastEmojiInString(
+                                emojiFieldValue
+                            ),
+                                emojiFieldFocused
+                            {
+                                Color.clear
+                                    .contentShape(Rectangle())
                                     .frame(width: 60, height: 60)
-                                    .background(background)
                                     .gesture(
                                         makeDragGesture(emoji: emoji)
                                     )
                             }
                         }
+                        .modifier(RoundedBorder(cornerRadius: 20, lineWidth: 6))
+
+                        ForEach(recentEmojis, id: \.self) { emoji in
+                            Text(emoji.stringValue)
+                                .gesture(
+                                    makeDragGesture(emoji: emoji)
+                                )
+                                .frame(width: 60, height: 60)
+                                .background(pink)
+                                .modifier(RoundedBorder(cornerRadius: 20, lineWidth: 6))
+                        }
                     }
-                    .font(.system(size: 40))
-                    .padding()
-                    .background(Color(uiColor: .systemBackground))
                 }
+                .font(.system(size: 40))
+                .padding()
             }
 
             if let dragState = dragState {
@@ -300,7 +307,7 @@ struct ContentView: View {
                     .position(dragState.position)
                     .allowsHitTesting(false)
             }
-        }
+        }.background(purple)
     }
 
     private func addToRecents(_ emoji: Emoji) {
