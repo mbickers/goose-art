@@ -349,17 +349,6 @@ struct ContentView: View {
                         (_, placement) in
                         placementView(placement)
                     }
-
-                    VStack {
-                        Debug(
-                            "Drag position",
-                            activePlacementState?.placement.position
-                                .roundedString()
-                        )
-                        Debug("Canvas frame", canvasFrame)
-
-                        Spacer()
-                    }
                 }
                 .modifier(GeometryTracker(binding: $canvasFrame))
                 .modifier(RoundedBorder(cornerRadius: 20, lineWidth: 6))
@@ -424,12 +413,6 @@ struct ContentView: View {
         if lastEmojiInString(emojiFieldValue) == emoji {
             emojiFieldValue = ""
         }
-    }
-}
-
-extension CGPoint {
-    func roundedString(decimals: Int = 2) -> String {
-        return String(format: "(%.\(decimals)f, %.\(decimals)f)", x, y)
     }
 }
 

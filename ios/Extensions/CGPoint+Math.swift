@@ -1,3 +1,4 @@
+import Foundation
 import CoreGraphics
 
 extension CGPoint {
@@ -24,5 +25,9 @@ extension CGPoint {
 
     func angle() -> CGFloat {
         return atan2(y, x)
+    }
+    
+    func roundedString(decimals: Int = 2) -> String {
+        return String(format: "(%.\(decimals)f, %.\(decimals)f)", x, y)
     }
 }
