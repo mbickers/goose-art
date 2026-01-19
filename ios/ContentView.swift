@@ -82,6 +82,21 @@ struct RoundedBorder: ViewModifier {
     }
 }
 
+struct EmojiButton: ViewModifier {
+    let color: Color
+    func body(content: Content) -> some View {
+        content
+            .frame(width: 60, height: 60)
+            .background(color)
+            .modifier(
+                RoundedBorder(
+                    cornerRadius: 20,
+                    lineWidth: 6
+                )
+            )
+    }
+}
+
 struct ContentView: View {
     @State private var placedEmojis: [Placement] = []
     @State private var recentEmojis: [Emoji] = ["🦆", "❤️", "🪿"].map {
@@ -93,7 +108,7 @@ struct ContentView: View {
     @State private var activePlacementState: ActivePlacementState? = nil
 
     // TODO: this is probably bad way to deal with geometry checking
-    @State private var canvasFrame: CGRect = .zero
+    @State private var canvasFrame: CGRect! = nil
 
     private func makeDragGesture(emoji: Emoji) -> some Gesture {
         DragGesture(minimumDistance: 10, coordinateSpace: .global).onChanged {
@@ -121,6 +136,119 @@ struct ContentView: View {
             }
 
             self.activePlacementState = nil
+        }
+    }
+
+    private var secondTouchGesture: some Gesture {
+        DragGesture(
+            minimumDistance: 10,
+            coordinateSpace: .global
+        )
+        .onChanged { value in
+            guard let dragState = activePlacementState else {
+                return
+            }
+            guard
+                let secondTouchState = dragState
+                    .secondTouchState
+            else {
+                self.activePlacementState = dragState.with(
+                    secondTouchState: SecondTouchState(
+                        initialOffset: value.startLocation
+                            - dragState.placement.position,
+                        baseScale: dragState.placement.scale,
+                        baseRotation: dragState.placement.rotation
+                    )
+                )
+                return
+            }
+
+            let currentOffset =
+                value.location - dragState.placement.position
+
+            let clampedInitialOffsetNorm = max(
+                secondTouchState.initialOffset
+                    .norm(),
+                1
+            )
+            let clampedScale =
+                (secondTouchState.baseScale
+                * 1.5 * currentOffset.norm()
+                / clampedInitialOffsetNorm).clamped(
+                    // TODO: factor out constants
+                    to: 0.05...10
+                )
+
+            let initialAngle = secondTouchState.initialOffset
+                .angle()
+            let currentAngle = currentOffset.angle()
+            let rotationDelta = currentAngle - initialAngle
+            let newRotation =
+                secondTouchState.baseRotation
+                + Angle(radians: rotationDelta)
+
+            self.activePlacementState = dragState.with(
+                scale: clampedScale,
+                rotation: newRotation
+            )
+        }.onEnded {
+            _ in
+            guard let dragState = activePlacementState else {
+                return
+            }
+            self.activePlacementState = dragState.with(
+                secondTouchState: nil
+            )
+        }
+    }
+
+    private var emojiTextField: some View {
+        ZStack {
+            TextField(
+                "",
+                text: $emojiFieldValue,
+                prompt: Text("+")
+            )
+            .focused($emojiFieldFocused)
+            .onAppear { emojiFieldFocused = true }
+            .multilineTextAlignment(.center)
+            .onChange(of: emojiFieldValue) {
+                oldValue,
+                newValue
+                in
+                emojiFieldValue =
+                    lastEmojiInString(newValue)?.stringValue
+                    ?? ""
+            }
+            .onChange(of: emojiFieldFocused) {
+                oldValue,
+                isFocused in
+                if !isFocused,
+                    let emoji = lastEmojiInString(
+                        emojiFieldValue
+                    )
+                {
+                    addToRecents(emoji)
+                }
+                emojiFieldValue = ""
+            }
+
+            // Using hacky ZStack because attaching the gesture directly to the TextField interacted badly with TextField interactions. Tried
+            // - using .gesture, including sequencing with LongPressGesture (never triggered)
+            // - highPriorityGesture (both drag and text selection interaction would happen, which was messy experience), same thing with LongPressGesturee
+            // - trying to disable hit testing on TextField, didn't work
+            if let emoji = lastEmojiInString(
+                emojiFieldValue
+            ),
+                emojiFieldFocused
+            {
+                // Using Rectangle() or EmptyView() does not work here.
+                Color.clear
+                    .contentShape(Rectangle())
+                    .gesture(
+                        makeDragGesture(emoji: emoji)
+                    )
+            }
         }
     }
 
@@ -155,7 +283,7 @@ struct ContentView: View {
                 .aspectRatio(1, contentMode: .fit)
                 .overlay(
                     GeometryReader { geometry in
-                        Color.clear
+                        EmptyView()
                             .onAppear {
                                 canvasFrame = geometry.frame(in: .global)
                             }
@@ -167,135 +295,21 @@ struct ContentView: View {
                     }
                 )
                 .gesture(
-                    DragGesture(
-                        minimumDistance: 10,
-                        coordinateSpace: .global
-                    )
-                    .onChanged { value in
-                        guard let dragState = activePlacementState else {
-                            return
-                        }
-                        guard
-                            let secondTouchState = dragState
-                                .secondTouchState
-                        else {
-                            self.activePlacementState = dragState.with(
-                                secondTouchState: SecondTouchState(
-                                    initialOffset: value.startLocation
-                                        - dragState.placement.position,
-                                    baseScale: dragState.placement.scale,
-                                    baseRotation: dragState.placement.rotation
-                                )
-                            )
-                            return
-                        }
-
-                        let currentOffset =
-                            value.location - dragState.placement.position
-
-                        let clampedInitialOffsetNorm = max(
-                            secondTouchState.initialOffset
-                                .norm(),
-                            1
-                        )
-                        let clampedScale =
-                            (secondTouchState.baseScale
-                            * 1.5 * currentOffset.norm()
-                            / clampedInitialOffsetNorm).clamped(
-                                // TODO: factor out constants
-                                to: 0.05...10
-                            )
-
-                        let initialAngle = secondTouchState.initialOffset
-                            .angle()
-                        let currentAngle = currentOffset.angle()
-                        let rotationDelta = currentAngle - initialAngle
-                        let newRotation =
-                            secondTouchState.baseRotation
-                            + Angle(radians: rotationDelta)
-
-                        self.activePlacementState = dragState.with(
-                            scale: clampedScale,
-                            rotation: newRotation
-                        )
-                    }.onEnded {
-                        _ in
-                        guard let dragState = activePlacementState else {
-                            return
-                        }
-                        self.activePlacementState = dragState.with(
-                            secondTouchState: nil
-                        )
-                    },
+                    secondTouchGesture,
                     isEnabled: activePlacementState != nil
                 )
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack {
-                        ZStack {
-                            TextField(
-                                "",
-                                text: $emojiFieldValue,
-                                prompt: Text("+")
-                            )
-                            .focused($emojiFieldFocused)
-                            .onAppear { emojiFieldFocused = true }
-                            .multilineTextAlignment(.center)
-                            .frame(width: 60, height: 60)
-                            .onChange(of: emojiFieldValue) {
-                                oldValue,
-                                newValue
-                                in
-                                emojiFieldValue =
-                                    lastEmojiInString(newValue)?.stringValue
-                                    ?? ""
-                            }
-                            .onChange(of: emojiFieldFocused) {
-                                oldValue,
-                                isFocused in
-                                if !isFocused,
-                                    let emoji = lastEmojiInString(
-                                        emojiFieldValue
-                                    )
-                                {
-                                    addToRecents(emoji)
-                                }
-                                emojiFieldValue = ""
-                            }
-                            .background(yellow)
-
-                            // Using hacky ZStack because attaching the gesture directly to the TextField interacted badly with TextField interactions. Tried
-                            // - using .gesture, including sequencing with LongPressGesture (never triggered)
-                            // - highPriorityGesture (both drag and text selection interaction would happen, which was messy experience), same thing with LongPressGesturee
-                            // - trying to disable hit testing on TextField, didn't work
-                            if let emoji = lastEmojiInString(
-                                emojiFieldValue
-                            ),
-                                emojiFieldFocused
-                            {
-                                Color.clear
-                                    .contentShape(Rectangle())
-                                    .frame(width: 60, height: 60)
-                                    .gesture(
-                                        makeDragGesture(emoji: emoji)
-                                    )
-                            }
-                        }
-                        .modifier(RoundedBorder(cornerRadius: 20, lineWidth: 6))
+                        emojiTextField
+                            .modifier(EmojiButton(color: yellow))
 
                         ForEach(recentEmojis, id: \.self) { emoji in
                             Text(emoji.stringValue)
                                 .gesture(
                                     makeDragGesture(emoji: emoji)
                                 )
-                                .frame(width: 60, height: 60)
-                                .background(pink)
-                                .modifier(
-                                    RoundedBorder(
-                                        cornerRadius: 20,
-                                        lineWidth: 6
-                                    )
-                                )
+                                .modifier(EmojiButton(color: pink))
                         }
                     }
                 }
