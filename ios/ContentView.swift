@@ -70,7 +70,7 @@ let pink = Color(hex: "E8A5B3")
 struct RoundedBorder: ViewModifier {
     let cornerRadius: CGFloat
     let lineWidth: CGFloat
-    
+
     func body(content: Content) -> some View {
         content
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
@@ -164,6 +164,65 @@ struct ContentView: View {
                     }
                 )
                 .coordinateSpace(name: "canvas")
+                .gesture(
+                    DragGesture(
+                        minimumDistance: 10,
+                        coordinateSpace: .global
+                    )
+                    .onChanged { value in
+                        guard let dragState = dragState else { return }
+                        guard
+                            let secondTouchState = dragState
+                                .secondTouchState
+                        else {
+                            self.dragState = dragState.with(
+                                secondTouchState: SecondTouchState(
+                                    initialOffset: value.startLocation
+                                        - dragState.position,
+                                    baseScale: dragState.scale,
+                                    baseRotation: dragState.rotation
+                                )
+                            )
+                            return
+                        }
+
+                        let currentOffset =
+                            value.location - dragState.position
+
+                        let clampedInitialOffsetNorm = max(
+                            secondTouchState.initialOffset
+                                .norm(),
+                            1
+                        )
+                        let clampedScale =
+                            (secondTouchState.baseScale
+                            * 1.5 * currentOffset.norm()
+                            / clampedInitialOffsetNorm).clamped(
+                                // TODO: factor out constants
+                                to: 0.05...10
+                            )
+
+                        let initialAngle = secondTouchState.initialOffset
+                            .angle()
+                        let currentAngle = currentOffset.angle()
+                        let rotationDelta = currentAngle - initialAngle
+                        let newRotation =
+                            secondTouchState.baseRotation
+                            + Angle(radians: rotationDelta)
+
+                        self.dragState = dragState.with(
+                            scale: clampedScale,
+                            rotation: newRotation
+                        )
+                    }.onEnded {
+                        _ in
+                        guard let dragState = dragState else { return }
+                        self.dragState = dragState.with(
+                            secondTouchState: nil
+                        )
+                    },
+                    isEnabled: dragState != nil
+                )
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack {
@@ -225,7 +284,12 @@ struct ContentView: View {
                                 )
                                 .frame(width: 60, height: 60)
                                 .background(pink)
-                                .modifier(RoundedBorder(cornerRadius: 20, lineWidth: 6))
+                                .modifier(
+                                    RoundedBorder(
+                                        cornerRadius: 20,
+                                        lineWidth: 6
+                                    )
+                                )
                         }
                     }
                 }
@@ -234,72 +298,6 @@ struct ContentView: View {
             }
 
             if let dragState = dragState {
-                Color.blue
-                    .opacity(0.3)
-                    .frame(
-                        minWidth: 0,
-                        maxWidth: .infinity,
-                        minHeight: 0,
-                        maxHeight: .infinity
-                    )
-                    .gesture(
-                        DragGesture(
-                            minimumDistance: 10,
-                            coordinateSpace: .global
-                        )
-                        .onChanged { value in
-                            guard
-                                let secondTouchState = dragState
-                                    .secondTouchState
-                            else {
-                                self.dragState = dragState.with(
-                                    secondTouchState: SecondTouchState(
-                                        initialOffset: value.startLocation
-                                            - dragState.position,
-                                        baseScale: dragState.scale,
-                                        baseRotation: dragState.rotation
-                                    )
-                                )
-                                return
-                            }
-
-                            let currentOffset =
-                                value.location - dragState.position
-
-                            let clampedInitialOffsetNorm = max(
-                                secondTouchState.initialOffset
-                                    .norm(),
-                                1
-                            )
-                            let clampedScale =
-                                (secondTouchState.baseScale
-                                * 1.5 * currentOffset.norm()
-                                / clampedInitialOffsetNorm).clamped(
-                                    // TODO: factor out constants
-                                    to: 0.05...10
-                                )
-
-                            let initialAngle = secondTouchState.initialOffset
-                                .angle()
-                            let currentAngle = currentOffset.angle()
-                            let rotationDelta = currentAngle - initialAngle
-                            let newRotation =
-                                secondTouchState.baseRotation
-                                + Angle(radians: rotationDelta)
-
-                            self.dragState = dragState.with(
-                                scale: clampedScale,
-                                rotation: newRotation
-                            )
-                        }.onEnded {
-                            _ in
-                            self.dragState = dragState.with(
-                                secondTouchState: nil
-                            )
-                        }
-
-                    )
-
                 Text(dragState.emoji.stringValue)
                     // TODO: factor out shared code for drawing emojis in preview/recent bar/canvas
                     .font(.system(size: 60 * dragState.scale))
