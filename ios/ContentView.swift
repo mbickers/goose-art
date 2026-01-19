@@ -87,7 +87,6 @@ struct EmojiButton: ViewModifier {
     let color: Color
     func body(content: Content) -> some View {
         content
-            .font(.system(size: 40))
             .frame(width: 60, height: 60)
             .background(color)
             .modifier(
@@ -332,58 +331,53 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            ScrollView {
-                VStack{
-                    // TODO: fix padding when keyboard down
-                    ZStack {
-                        Rectangle()
-                            .fill(blue)
-                        
-                        ForEach(placedEmojis.enumerated(), id: \.offset) {
-                            (_, placement) in
-                            placementView(placement)
-                        }
-                        
-                        VStack {
-                            Debug(
-                                "Drag position",
-                                activePlacementState?.placement.position
-                                    .roundedString()
-                            )
-                            Debug("Canvas frame", canvasFrame)
-                            
-                            Spacer()
-                        }
+            VStack(spacing: 0) {
+                // TODO: fix padding when keyboard down
+                ZStack {
+                    Rectangle()
+                        .fill(blue)
+
+                    ForEach(placedEmojis.enumerated(), id: \.offset) {
+                        (_, placement) in
+                        placementView(placement)
                     }
-                    .modifier(GeometryTracker(binding: $canvasFrame))
-                    .modifier(RoundedBorder(cornerRadius: 30, lineWidth: 6))
-                    .frame(maxWidth: .infinity)
-                    .aspectRatio(1, contentMode: .fit)
-                    .frame(maxHeight: 300)
-                    .gesture(
-                        secondTouchGesture,
-                        isEnabled: activePlacementState != nil
-                    )
-                    .padding(10)
-                    
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack {
-                            emojiTextField
-                                .modifier(EmojiButton(color: yellow))
-                            
-                            ForEach(recentEmojis, id: \.self) { emoji in
-                                Text(emoji.stringValue)
-                                    .gesture(
-                                        makeDragGesture(emoji: emoji)
-                                    )
-                                    .modifier(EmojiButton(color: pink))
-                            }
-                        }
+
+                    VStack {
+                        Debug(
+                            "Drag position",
+                            activePlacementState?.placement.position
+                                .roundedString()
+                        )
+                        Debug("Canvas frame", canvasFrame)
+
+                        Spacer()
                     }
-                    .padding(10)
-                    .modifier(RoundedBorder(cornerRadius: 30, lineWidth: 6))
                 }
-                .padding(10)
+                .modifier(GeometryTracker(binding: $canvasFrame))
+                .modifier(RoundedBorder(cornerRadius: 20, lineWidth: 6))
+                .frame(maxWidth: .infinity)
+                .aspectRatio(1, contentMode: .fit)
+                .gesture(
+                    secondTouchGesture,
+                    isEnabled: activePlacementState != nil
+                )
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack {
+                        emojiTextField
+                            .modifier(EmojiButton(color: yellow))
+
+                        ForEach(recentEmojis, id: \.self) { emoji in
+                            Text(emoji.stringValue)
+                                .gesture(
+                                    makeDragGesture(emoji: emoji)
+                                )
+                                .modifier(EmojiButton(color: pink))
+                        }
+                    }
+                }
+                .font(.system(size: 40))
+                .padding()
             }
 
             if let dragState = activePlacementState, let canvasFrame {
