@@ -171,8 +171,11 @@ struct ContentView: View {
                     globalPoint: value.location
                 )
             else { return }
-            guard let activePlacementState else {
-                activePlacementState = ActivePlacementState(
+            self.activePlacementState =
+                activePlacementState?.with(
+                    position: placementPosition
+                )
+                ?? ActivePlacementState(
                     placement: Placement(
                         emoji: emoji,
                         position: placementPosition,
@@ -181,17 +184,12 @@ struct ContentView: View {
                     ),
                     secondTouchState: nil
                 )
-                return
-            }
-            self.activePlacementState = activePlacementState.with(
-                position: placementPosition
-            )
         }.onEnded { value in
-            guard let dragState = self.activePlacementState else { return }
+            guard let activePlacementState else { return }
 
-            if dragState.placement.hasValidPosition {
-                placedEmojis.append(dragState.placement)
-                addToRecents(dragState.placement.emoji)
+            if activePlacementState.placement.hasValidPosition {
+                placedEmojis.append(activePlacementState.placement)
+                addToRecents(activePlacementState.placement.emoji)
             }
 
             self.activePlacementState = nil
