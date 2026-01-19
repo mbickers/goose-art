@@ -97,6 +97,27 @@ struct EmojiButton: ViewModifier {
     }
 }
 
+struct GeometryTracker: ViewModifier {
+    @Binding var binding: CGRect?
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                GeometryReader { geometry in
+                    EmptyView()
+                        .onAppear {
+                            binding = geometry.frame(in: .global)
+                        }
+                        .onChange(of: geometry.frame(in: .global)) {
+                            oldValue,
+                            newValue in
+                            binding = newValue
+                        }
+                }
+            )
+    }
+}
+
 struct ContentView: View {
     @State private var placedEmojis: [Placement] = [
         Placement(
@@ -300,19 +321,7 @@ struct ContentView: View {
                 .modifier(RoundedBorder(cornerRadius: 20, lineWidth: 6))
                 .frame(maxWidth: .infinity)
                 .aspectRatio(1, contentMode: .fit)
-                .overlay(
-                    GeometryReader { geometry in
-                        EmptyView()
-                            .onAppear {
-                                canvasFrame = geometry.frame(in: .global)
-                            }
-                            .onChange(of: geometry.frame(in: .global)) {
-                                oldValue,
-                                newValue in
-                                canvasFrame = newValue
-                            }
-                    }
-                )
+                .modifier(GeometryTracker(binding: $canvasFrame))
                 .gesture(
                     secondTouchGesture,
                     isEnabled: activePlacementState != nil
