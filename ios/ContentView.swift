@@ -118,6 +118,21 @@ struct GeometryTracker: ViewModifier {
     }
 }
 
+struct Debug: View {
+    let description: String
+    let value: String
+
+    init<T>(_ description: String, _ value: T) {
+        self.description = description
+        self.value = String(describing: value)
+    }
+
+    var body: some View {
+        Text(verbatim: "\(description): \(value)")
+            .foregroundColor(.black)
+    }
+}
+
 struct ContentView: View {
     @State private var placedEmojis: [Placement] = [
         Placement(
@@ -308,12 +323,12 @@ struct ContentView: View {
                     }
 
                     VStack {
-                        Text(
-                            "Drag state \(String(describing: activePlacementState))"
+                        Debug(
+                            "Drag position",
+                            activePlacementState?.placement.position
+                                .roundedString()
                         )
-                        .foregroundColor(.black)
-                        Text("Canvas frame \(String(describing: canvasFrame))")
-                            .foregroundColor(.black)
+                        Debug("Canvas frame", canvasFrame)
 
                         Spacer()
                     }
@@ -366,6 +381,12 @@ struct ContentView: View {
         if lastEmojiInString(emojiFieldValue) == emoji {
             emojiFieldValue = ""
         }
+    }
+}
+
+extension CGPoint {
+    func roundedString(decimals: Int = 2) -> String {
+        return String(format: "(%.\(decimals)f, %.\(decimals)f)", x, y)
     }
 }
 
