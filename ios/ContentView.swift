@@ -98,7 +98,14 @@ struct EmojiButton: ViewModifier {
 }
 
 struct ContentView: View {
-    @State private var placedEmojis: [Placement] = []
+    @State private var placedEmojis: [Placement] = [
+        Placement(
+            emoji: Emoji("🦆")!,
+            position: CGPoint(x: 0.5, y: 0.5),
+            scale: 0.5,
+            rotation: Angle(radians: 0.5)
+        )
+    ]
     @State private var recentEmojis: [Emoji] = ["🦆", "❤️", "🪿"].map {
         Emoji($0)!
     }
@@ -108,7 +115,7 @@ struct ContentView: View {
     @State private var activePlacementState: ActivePlacementState? = nil
 
     // TODO: this is probably bad way to deal with geometry checking
-    @State private var canvasFrame: CGRect! = nil
+    @State private var canvasFrame: CGRect? = nil
 
     private func makeDragGesture(emoji: Emoji) -> some Gesture {
         DragGesture(minimumDistance: 10, coordinateSpace: .global).onChanged {
@@ -129,7 +136,9 @@ struct ContentView: View {
                 position: value.location
             )
         }.onEnded { value in
-            guard let dragState = self.activePlacementState else { return }
+            guard let dragState = self.activePlacementState,
+                let canvasFrame = canvasFrame
+            else { return }
             if canvasFrame.contains(dragState.placement.position) {
                 placedEmojis.append(dragState.placement)
                 addToRecents(dragState.placement.emoji)
@@ -252,6 +261,18 @@ struct ContentView: View {
         }
     }
 
+    @ViewBuilder private func placementView(_ placement: Placement) -> some View
+    {
+        if let canvasFrame = canvasFrame {
+            Text(placement.emoji.stringValue)
+                .font(.system(size: canvasFrame.height * placement.scale))
+                .rotationEffect(placement.rotation)
+                .position(placement.position * canvasFrame.height)
+        } else {
+            EmptyView()
+        }
+    }
+
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
@@ -260,11 +281,8 @@ struct ContentView: View {
                         .fill(blue)
 
                     ForEach(placedEmojis.enumerated(), id: \.offset) {
-                        (_, placedEmoji) in
-                        Text(placedEmoji.emoji.stringValue)
-                            .font(.system(size: 50 * placedEmoji.scale))
-                            .rotationEffect(placedEmoji.rotation)
-                            .position(placedEmoji.position)
+                        (_, placement) in
+                        placementView(placement)
                     }
 
                     VStack {
