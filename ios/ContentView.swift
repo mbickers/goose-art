@@ -5,6 +5,10 @@ struct Placement {
     let position: CGPoint
     let scale: CGFloat
     let rotation: Angle
+
+    var hasValidPosition: Bool {
+        return CGRect(x: 0, y: 0, width: 1, height: 1).contains(position)
+    }
 }
 
 struct SecondTouchState {
@@ -12,9 +16,6 @@ struct SecondTouchState {
     let baseScale: CGFloat
     let baseRotation: Angle
 }
-
-// TODO: fix offset/size when dropping
-// TODO: store size instead of scale (at least, be consistent about units everywhere). Choose units for size in canvas and DragState
 
 struct ActivePlacementState {
     let placement: Placement
@@ -149,19 +150,30 @@ struct ContentView: View {
     @FocusState private var emojiFieldFocused: Bool
 
     @State private var activePlacementState: ActivePlacementState? = nil
-
-    // TODO: this is probably bad way to deal with geometry checking
     @State private var canvasFrame: CGRect? = nil
+
+    private func toPlacementCoordinates(globalPoint: CGPoint) -> CGPoint? {
+        guard let canvasFrame else { return nil }
+        return (globalPoint - canvasFrame.origin).safeDivide(
+            canvasFrame.width
+        )
+    }
 
     private func makeDragGesture(emoji: Emoji) -> some Gesture {
         DragGesture(minimumDistance: 10, coordinateSpace: .global).onChanged {
             value in
+            // TODO: figure out better names for the coordinate systems
+            guard
+                let placementPosition = toPlacementCoordinates(
+                    globalPoint: value.location
+                )
+            else { return }
             guard let activePlacementState else {
                 activePlacementState = ActivePlacementState(
                     placement: Placement(
                         emoji: emoji,
-                        position: value.location,
-                        scale: 1.0,
+                        position: placementPosition,
+                        scale: 0.3,
                         rotation: Angle(degrees: 0)
                     ),
                     secondTouchState: nil
@@ -169,13 +181,12 @@ struct ContentView: View {
                 return
             }
             self.activePlacementState = activePlacementState.with(
-                position: value.location
+                position: placementPosition
             )
         }.onEnded { value in
-            guard let dragState = self.activePlacementState,
-                let canvasFrame = canvasFrame
-            else { return }
-            if canvasFrame.contains(dragState.placement.position) {
+            guard let dragState = self.activePlacementState else { return }
+
+            if dragState.placement.hasValidPosition {
                 placedEmojis.append(dragState.placement)
                 addToRecents(dragState.placement.emoji)
             }
@@ -190,7 +201,14 @@ struct ContentView: View {
             coordinateSpace: .global
         )
         .onChanged { value in
-            guard let dragState = activePlacementState else {
+            guard let dragState = activePlacementState,
+                let startLocationCanvasSpace = toPlacementCoordinates(
+                    globalPoint: value.startLocation
+                ),
+                let currentLocationCanvasSpace = toPlacementCoordinates(
+                    globalPoint: value.location
+                )
+            else {
                 return
             }
             guard
@@ -199,7 +217,7 @@ struct ContentView: View {
             else {
                 self.activePlacementState = dragState.with(
                     secondTouchState: SecondTouchState(
-                        initialOffset: value.startLocation
+                        initialOffset: startLocationCanvasSpace
                             - dragState.placement.position,
                         baseScale: dragState.placement.scale,
                         baseRotation: dragState.placement.rotation
@@ -209,19 +227,19 @@ struct ContentView: View {
             }
 
             let currentOffset =
-                value.location - dragState.placement.position
+                currentLocationCanvasSpace - dragState.placement.position
 
             let clampedInitialOffsetNorm = max(
                 secondTouchState.initialOffset
                     .norm(),
-                1
+                0.01
             )
             let clampedScale =
                 (secondTouchState.baseScale
                 * 1.5 * currentOffset.norm()
                 / clampedInitialOffsetNorm).clamped(
                     // TODO: factor out constants
-                    to: 0.05...10
+                    to: 0.05...1
                 )
 
             let initialAngle = secondTouchState.initialOffset
@@ -297,13 +315,15 @@ struct ContentView: View {
         }
     }
 
-    @ViewBuilder private func placementView(_ placement: Placement) -> some View
-    {
+    @ViewBuilder private func placementView(
+        _ placement: Placement,
+        offset: CGPoint = .zero
+    ) -> some View {
         if let canvasFrame = canvasFrame {
             Text(placement.emoji.stringValue)
                 .font(.system(size: canvasFrame.height * placement.scale))
                 .rotationEffect(placement.rotation)
-                .position(placement.position * canvasFrame.height)
+                .position(placement.position * canvasFrame.height + offset)
         } else {
             EmptyView()
         }
@@ -333,10 +353,10 @@ struct ContentView: View {
                         Spacer()
                     }
                 }
+                .modifier(GeometryTracker(binding: $canvasFrame))
                 .modifier(RoundedBorder(cornerRadius: 20, lineWidth: 6))
                 .frame(maxWidth: .infinity)
                 .aspectRatio(1, contentMode: .fit)
-                .modifier(GeometryTracker(binding: $canvasFrame))
                 .gesture(
                     secondTouchGesture,
                     isEnabled: activePlacementState != nil
@@ -360,14 +380,11 @@ struct ContentView: View {
                 .padding()
             }
 
-            if let dragState = activePlacementState {
-                Text(dragState.placement.emoji.stringValue)
-                    // TODO: factor out shared code for drawing emojis in preview/recent bar/canvas
-                    .font(.system(size: 60 * dragState.placement.scale))
-                    .background(Color.yellow.opacity(0.3))
-                    .rotationEffect(dragState.placement.rotation)
-                    .position(dragState.placement.position)
-                    // TODO: maybe there is a modifier that makes position ignore safe area, because I think that is current problem
+            if let dragState = activePlacementState, let canvasFrame {
+                placementView(dragState.placement, offset: canvasFrame.origin)
+                    .opacity(dragState.placement.hasValidPosition ? 0.8 : 0.5)
+                    // ignores safe area so that status bar and dynamic island to impact placement
+                    .ignoresSafeArea()
                     .allowsHitTesting(false)
             }
         }.background(purple)
