@@ -360,15 +360,6 @@ struct ContentView: View {
     }
 }
 
-// TODO: why do I need this
-struct CanvasFramePreferenceKey: PreferenceKey {
-    static var defaultValue: CGRect = .zero
-
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
-        value = nextValue()
-    }
-}
-
 #Preview {
     ContentView()
 }
