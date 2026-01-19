@@ -87,6 +87,7 @@ struct EmojiButton: ViewModifier {
     let color: Color
     func body(content: Content) -> some View {
         content
+            .font(.system(size: 40))
             .frame(width: 60, height: 60)
             .background(color)
             .modifier(
@@ -336,8 +337,7 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            VStack(spacing: 0) {
-                // TODO: fix padding when keyboard down
+            VStack(spacing: 10) {
                 ZStack {
                     Rectangle()
                         .fill(blue)
@@ -381,9 +381,8 @@ struct ContentView: View {
                         }
                     }
                 }
-                .font(.system(size: 40))
-                .padding()
-            }
+                .scrollClipDisabled()
+            }.padding()
 
             if let dragState = activePlacementState, let canvasFrame {
                 placementView(dragState.placement, offset: canvasFrame.origin)
@@ -392,15 +391,13 @@ struct ContentView: View {
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
             }
-        }.background(purple)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity).background(purple)
     }
 
     private func addToRecents(_ emoji: Emoji) {
         recentEmojis.removeAll { $0 == emoji }
         recentEmojis.insert(emoji, at: 0)
-        if recentEmojis.count > 10 {
-            recentEmojis = Array(recentEmojis.prefix(10))
-        }
+        recentEmojis = Array(recentEmojis.prefix(10))
         if lastEmojiInString(emojiFieldValue) == emoji {
             emojiFieldValue = ""
         }
