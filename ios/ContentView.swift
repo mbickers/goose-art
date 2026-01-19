@@ -276,6 +276,7 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
+                // TODO: fix padding when keyboard down
                 ZStack {
                     Rectangle()
                         .fill(blue)
