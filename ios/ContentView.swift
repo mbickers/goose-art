@@ -160,7 +160,10 @@ struct ContentView: View {
     }
 
     private func makeDragGesture(emoji: Emoji) -> some Gesture {
-        DragGesture(minimumDistance: 10, coordinateSpace: .global).onChanged {
+        let dragGesture = DragGesture(
+            minimumDistance: 10,
+            coordinateSpace: .global
+        ).onChanged {
             value in
             // TODO: figure out better names for the coordinate systems
             guard
@@ -193,6 +196,8 @@ struct ContentView: View {
 
             self.activePlacementState = nil
         }
+
+        return LongPressGesture().sequenced(before: dragGesture)
     }
 
     private var secondTouchGesture: some Gesture {
