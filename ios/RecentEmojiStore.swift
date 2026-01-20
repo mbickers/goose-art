@@ -1,4 +1,3 @@
-import Combine
 import SwiftUI
 
 @Observable class RecentEmojiStore {
