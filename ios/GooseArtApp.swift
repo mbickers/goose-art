@@ -9,7 +9,7 @@ import SwiftUI
 
 @main
 struct GooseArtApp: App {
-    @State var recentEmojiStore = RecentEmojiStore(inMemory: false)
+    @State var recentEmojiStore = RecentEmojiStore()
     
     var body: some Scene {
         WindowGroup {

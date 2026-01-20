@@ -1,16 +1,29 @@
-import SwiftUI
 import Combine
+import SwiftUI
 
 @Observable class RecentEmojiStore {
     private(set) var recentEmojis: [Emoji]
-    
-    init(inMemory: Bool) {
+
+    init() {
         self.recentEmojis = ["🦆", "❤️", "🪿"].compactMap { Emoji($0) }
+
+        if let data = UserDefaults.standard.data(forKey: "recentEmojis"),
+            let decoded = try? JSONDecoder().decode(
+                Array<Emoji>.self,
+                from: data
+            )
+        {
+            self.recentEmojis = decoded
+        }
     }
-    
+
     func emojiUsed(_ emoji: Emoji) {
         recentEmojis.removeAll { $0 == emoji }
         recentEmojis.insert(emoji, at: 0)
         recentEmojis = Array(recentEmojis.prefix(10))
+        UserDefaults.standard.set(
+            try! JSONEncoder().encode(recentEmojis),
+            forKey: "recentEmojis"
+        )
     }
 }

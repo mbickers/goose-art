@@ -451,6 +451,6 @@ extension CGPoint {
 }
 
 #Preview {
-    @Previewable @State var recentEmojiStore = RecentEmojiStore(inMemory: true)
+    @Previewable @State var recentEmojiStore = RecentEmojiStore()
     ContentView(recentEmojisStore: recentEmojiStore)
 }
