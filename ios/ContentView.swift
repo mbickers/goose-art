@@ -1,10 +1,12 @@
 import SwiftUI
 
+// TODO: make public/private consistent
+
 struct Placement {
     let emoji: Emoji
     let position: CGPoint
     let scale: CGFloat
-    let rotation: Angle
+    let rotation: CGFloat
     let isMirrored: Bool
 
     var hasValidPosition: Bool {
@@ -15,7 +17,7 @@ struct Placement {
 struct SecondTouchState {
     let initialOffset: CGPoint
     let baseScale: CGFloat
-    let baseRotation: Angle
+    let baseRotation: CGFloat
 }
 
 struct ActivePlacementState {
@@ -47,7 +49,7 @@ struct ActivePlacementState {
         )
     }
 
-    func with(scale: CGFloat, rotation: Angle) -> ActivePlacementState {
+    func with(scale: CGFloat, rotation: CGFloat) -> ActivePlacementState {
         return ActivePlacementState(
             placement: Placement(
                 emoji: placement.emoji,
@@ -177,15 +179,7 @@ struct Debug: View {
 private let buttonIconColor = darkPurple.opacity(0.5)
 
 struct ContentView: View {
-    @State private var placedEmojis: [Placement] = [
-        Placement(
-            emoji: Emoji("🦆")!,
-            position: CGPoint(x: 0.5, y: 0.5),
-            scale: 0.5,
-            rotation: Angle(radians: 0.5),
-            isMirrored: false
-        )
-    ]
+    @State private var placedEmojis: [Placement] = []
     @State private var recentEmojis: [Emoji] = ["🦆", "❤️", "🪿"].map {
         Emoji($0)!
     }
@@ -224,7 +218,7 @@ struct ContentView: View {
                         emoji: emoji,
                         position: placementPosition,
                         scale: 0.3,
-                        rotation: Angle(degrees: 0),
+                        rotation: 0,
                         isMirrored: false
                     ),
                     secondTouchState: nil
@@ -296,9 +290,7 @@ struct ContentView: View {
                 .angle()
             let currentAngle = currentOffset.angle()
             let rotationDelta = currentAngle - initialAngle
-            let newRotation =
-                secondTouchState.baseRotation
-                + Angle(radians: rotationDelta)
+            let newRotation = secondTouchState.baseRotation + rotationDelta
 
             self.activePlacementState = dragState.with(
                 scale: clampedScale,
@@ -375,7 +367,7 @@ struct ContentView: View {
             Text(placement.emoji.stringValue)
                 .font(.system(size: canvasFrame.height * placement.scale))
                 .scaleEffect(x: placement.isMirrored ? -1 : 1, y: 1)
-                .rotationEffect(placement.rotation)
+                .rotationEffect(Angle(radians: placement.rotation))
                 .position(placement.position * canvasFrame.height + offset)
         } else {
             EmptyView()
