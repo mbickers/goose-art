@@ -168,7 +168,7 @@ private let buttonIconColor = darkPurple.opacity(0.5)
 
 struct ContentView: View {
     @State var placements: [Placement] = []
-    var recentEmojisStore: RecentEmojiStore
+    var recentEmojisStore: RecentEmojiService
 
     @State private var emojiFieldValue: String = ""
     @FocusState private var emojiFieldFocused: Bool
@@ -451,6 +451,6 @@ extension CGPoint {
 }
 
 #Preview {
-    @Previewable @State var recentEmojiStore = RecentEmojiStore()
+    @Previewable @State var recentEmojiStore = RecentEmojiService()
     ContentView(recentEmojisStore: recentEmojiStore)
 }

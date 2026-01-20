@@ -1,6 +1,6 @@
 import SwiftUI
 
-@Observable class RecentEmojiStore {
+@Observable class RecentEmojiService {
     private(set) var recentEmojis: [Emoji]
 
     init() {
