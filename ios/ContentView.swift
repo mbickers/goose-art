@@ -168,7 +168,7 @@ private let buttonIconColor = darkPurple.opacity(0.5)
 
 struct ContentView: View {
     @State var placements: [Placement] = []
-    @State var recentEmojis = ["🦆", "❤️", "🪿"].compactMap { Emoji($0) }
+    var recentEmojisStore: RecentEmojiStore
 
     @State private var emojiFieldValue: String = ""
     @FocusState private var emojiFieldFocused: Bool
@@ -215,7 +215,10 @@ struct ContentView: View {
 
             if activePlacementState.placement.hasValidPosition {
                 placements.append(activePlacementState.placement)
-                addToRecents(activePlacementState.placement.emoji)
+                recentEmojisStore.emojiUsed(emoji)
+                if lastEmojiInString(emojiFieldValue) == emoji {
+                    emojiFieldValue = ""
+                }
             }
 
             self.activePlacementState = nil
@@ -322,7 +325,7 @@ struct ContentView: View {
                         emojiFieldValue
                     )
                 {
-                    addToRecents(emoji)
+                    recentEmojisStore.emojiUsed(emoji)
                 }
                 emojiFieldValue = ""
             }
@@ -410,7 +413,7 @@ struct ContentView: View {
                         emojiTextField
                             .modifier(EmojiButton(color: yellow))
 
-                        ForEach(recentEmojis, id: \.self) { emoji in
+                        ForEach(recentEmojisStore.recentEmojis, id: \.self) { emoji in
                             Text(emoji.stringValue)
                                 .gesture(
                                     makeDragGesture(emoji: emoji)
@@ -439,15 +442,6 @@ struct ContentView: View {
             Button("Log out", role: .destructive) {}
         }
     }
-
-    private func addToRecents(_ emoji: Emoji) {
-        recentEmojis.removeAll { $0 == emoji }
-        recentEmojis.insert(emoji, at: 0)
-        recentEmojis = Array(recentEmojis.prefix(10))
-        if lastEmojiInString(emojiFieldValue) == emoji {
-            emojiFieldValue = ""
-        }
-    }
 }
 
 extension CGPoint {
@@ -457,5 +451,6 @@ extension CGPoint {
 }
 
 #Preview {
-    ContentView()
+    @Previewable @State var recentEmojiStore = RecentEmojiStore(inMemory: true)
+    ContentView(recentEmojisStore: recentEmojiStore)
 }
