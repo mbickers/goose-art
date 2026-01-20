@@ -5,7 +5,7 @@ import SwiftUI
 struct SecondTouchState {
     let initialOffset: CGPoint
     let baseScale: CGFloat
-    let baseRotation: CGFloat
+    let baseRotation: CGFloat  // radians
 }
 
 struct ActivePlacementState {
@@ -167,8 +167,8 @@ struct Debug: View {
 private let buttonIconColor = darkPurple.opacity(0.5)
 
 struct ContentView: View {
-    @State var placements: [Placement] = []
-    var recentEmojisStore: RecentEmojiService
+    let placementService: PlacementService
+    let recentEmojisStore: RecentEmojiService
 
     @State private var emojiFieldValue: String = ""
     @FocusState private var emojiFieldFocused: Bool
@@ -214,11 +214,10 @@ struct ContentView: View {
             guard let activePlacementState else { return }
 
             if activePlacementState.placement.hasValidPosition {
-                placements.append(activePlacementState.placement)
-                recentEmojisStore.emojiUsed(emoji)
-                if lastEmojiInString(emojiFieldValue) == emoji {
-                    emojiFieldValue = ""
-                }
+                placementService.place(activePlacementState.placement)
+                recentEmojisStore.emojiUsed(
+                    activePlacementState.placement.emoji
+                )
             }
 
             self.activePlacementState = nil
@@ -371,7 +370,10 @@ struct ContentView: View {
                     Rectangle()
                         .fill(blue)
 
-                    ForEach(placements.enumerated(), id: \.offset) {
+                    ForEach(
+                        placementService.placements.enumerated(),
+                        id: \.offset
+                    ) {
                         (_, placement) in
                         placementView(placement)
                     }
@@ -388,8 +390,9 @@ struct ContentView: View {
                 HStack(spacing: 10) {
                     ActionButton(
                         iconName: "arrow.uturn.backward",
-                        enabled: false
-                    ) {}
+                        enabled: placementService.canUndo,
+                        action: placementService.undo,
+                    )
 
                     ActionButton(
                         iconName:
@@ -413,7 +416,8 @@ struct ContentView: View {
                         emojiTextField
                             .modifier(EmojiButton(color: yellow))
 
-                        ForEach(recentEmojisStore.recentEmojis, id: \.self) { emoji in
+                        ForEach(recentEmojisStore.recentEmojis, id: \.self) {
+                            emoji in
                             Text(emoji.stringValue)
                                 .gesture(
                                     makeDragGesture(emoji: emoji)
@@ -436,21 +440,15 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(purple)
         .confirmationDialog("Settings", isPresented: $showingSettings) {
-            Button("Clear", role: .destructive) {
-                placements.removeAll()
-            }
+            Button("Clear", role: .destructive, action: placementService.clear)
             Button("Log out", role: .destructive) {}
         }
     }
 }
 
-extension CGPoint {
-    func roundedString(decimals: Int = 2) -> String {
-        return String(format: "(%.\(decimals)f, %.\(decimals)f)", x, y)
-    }
-}
-
 #Preview {
-    @Previewable @State var recentEmojiStore = RecentEmojiService()
-    ContentView(recentEmojisStore: recentEmojiStore)
+    ContentView(
+        placementService: PlacementService(),
+        recentEmojisStore: RecentEmojiService()
+    )
 }
