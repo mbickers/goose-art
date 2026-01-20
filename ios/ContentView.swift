@@ -116,13 +116,13 @@ struct ActionButton: View {
     let iconName: String
     let action: () -> Void
     let enabled: Bool
-    
+
     init(iconName: String, enabled: Bool = true, action: @escaping () -> Void) {
         self.iconName = iconName
         self.enabled = enabled
         self.action = action
     }
-    
+
     var body: some View {
         Button(action: action) {
             Image(systemName: iconName)
@@ -194,6 +194,7 @@ struct ContentView: View {
 
     @State private var activePlacementState: ActivePlacementState? = nil
     @State private var canvasFrame: CGRect? = nil
+    @State private var showingSettings = false
 
     private func toPlacementCoordinates(globalPoint: CGPoint) -> CGPoint? {
         guard let canvasFrame else { return nil }
@@ -403,10 +404,14 @@ struct ContentView: View {
                 )
 
                 HStack(spacing: 10) {
-                    ActionButton(iconName: "arrow.uturn.backward", enabled: false) {}
+                    ActionButton(
+                        iconName: "arrow.uturn.backward",
+                        enabled: false
+                    ) {}
 
                     ActionButton(
-                        iconName: "arrow.left.and.right.righttriangle.left.righttriangle.right",
+                        iconName:
+                            "arrow.left.and.right.righttriangle.left.righttriangle.right",
                         enabled: activePlacementState != nil
                     ) {
                         if let dragState = activePlacementState {
@@ -416,7 +421,9 @@ struct ContentView: View {
                         }
                     }
 
-                    ActionButton(iconName: "gearshape") {}
+                    ActionButton(iconName: "gearshape") {
+                        showingSettings = true
+                    }
                 }
 
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -443,7 +450,15 @@ struct ContentView: View {
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
             }
-        }.frame(maxWidth: .infinity, maxHeight: .infinity).background(purple)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(purple)
+        .confirmationDialog("Settings", isPresented: $showingSettings) {
+            Button("Clear", role: .destructive) {
+                placedEmojis.removeAll()
+            }
+            Button("Log out", role: .destructive) {}
+        }
     }
 
     private func addToRecents(_ emoji: Emoji) {
