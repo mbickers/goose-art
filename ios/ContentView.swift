@@ -2,18 +2,6 @@ import SwiftUI
 
 // TODO: make public/private consistent
 
-struct Placement {
-    let emoji: Emoji
-    let position: CGPoint
-    let scale: CGFloat
-    let rotation: CGFloat
-    let isMirrored: Bool
-
-    var hasValidPosition: Bool {
-        return CGRect(x: 0, y: 0, width: 1, height: 1).contains(position)
-    }
-}
-
 struct SecondTouchState {
     let initialOffset: CGPoint
     let baseScale: CGFloat
@@ -179,10 +167,9 @@ struct Debug: View {
 private let buttonIconColor = darkPurple.opacity(0.5)
 
 struct ContentView: View {
-    @State private var placedEmojis: [Placement] = []
-    @State private var recentEmojis: [Emoji] = ["🦆", "❤️", "🪿"].map {
-        Emoji($0)!
-    }
+    @State var placements: [Placement] = []
+    @State var recentEmojis = ["🦆", "❤️", "🪿"].compactMap { Emoji($0) }
+
     @State private var emojiFieldValue: String = ""
     @FocusState private var emojiFieldFocused: Bool
 
@@ -227,7 +214,7 @@ struct ContentView: View {
             guard let activePlacementState else { return }
 
             if activePlacementState.placement.hasValidPosition {
-                placedEmojis.append(activePlacementState.placement)
+                placements.append(activePlacementState.placement)
                 addToRecents(activePlacementState.placement.emoji)
             }
 
@@ -381,7 +368,7 @@ struct ContentView: View {
                     Rectangle()
                         .fill(blue)
 
-                    ForEach(placedEmojis.enumerated(), id: \.offset) {
+                    ForEach(placements.enumerated(), id: \.offset) {
                         (_, placement) in
                         placementView(placement)
                     }
@@ -447,7 +434,7 @@ struct ContentView: View {
         .background(purple)
         .confirmationDialog("Settings", isPresented: $showingSettings) {
             Button("Clear", role: .destructive) {
-                placedEmojis.removeAll()
+                placements.removeAll()
             }
             Button("Log out", role: .destructive) {}
         }
@@ -460,6 +447,12 @@ struct ContentView: View {
         if lastEmojiInString(emojiFieldValue) == emoji {
             emojiFieldValue = ""
         }
+    }
+}
+
+extension CGPoint {
+    func roundedString(decimals: Int = 2) -> String {
+        return String(format: "(%.\(decimals)f, %.\(decimals)f)", x, y)
     }
 }
 
