@@ -5,6 +5,7 @@ struct Placement {
     let position: CGPoint
     let scale: CGFloat
     let rotation: Angle
+    let isMirrored: Bool
 
     var hasValidPosition: Bool {
         return CGRect(x: 0, y: 0, width: 1, height: 1).contains(position)
@@ -32,7 +33,8 @@ struct ActivePlacementState {
                 emoji: placement.emoji,
                 position: position,
                 scale: placement.scale,
-                rotation: placement.rotation
+                rotation: placement.rotation,
+                isMirrored: placement.isMirrored
             ),
             secondTouchState: secondTouchState
         )
@@ -51,7 +53,21 @@ struct ActivePlacementState {
                 emoji: placement.emoji,
                 position: placement.position,
                 scale: scale,
-                rotation: rotation
+                rotation: rotation,
+                isMirrored: placement.isMirrored
+            ),
+            secondTouchState: secondTouchState
+        )
+    }
+
+    func with(isMirrored: Bool) -> ActivePlacementState {
+        return ActivePlacementState(
+            placement: Placement(
+                emoji: placement.emoji,
+                position: placement.position,
+                scale: placement.scale,
+                rotation: placement.rotation,
+                isMirrored: isMirrored
             ),
             secondTouchState: secondTouchState
         )
@@ -93,6 +109,32 @@ struct EmojiButton: ViewModifier {
             .frame(width: 60, height: 60)
             .background(color)
             .modifier(buttonBorder)
+    }
+}
+
+struct ActionButton: View {
+    let iconName: String
+    let action: () -> Void
+    let enabled: Bool
+    
+    init(iconName: String, enabled: Bool = true, action: @escaping () -> Void) {
+        self.iconName = iconName
+        self.enabled = enabled
+        self.action = action
+    }
+    
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: iconName)
+                .font(.system(size: 20, weight: .heavy))
+                .foregroundColor(buttonIconColor)
+                .frame(maxWidth: .infinity)
+                .frame(height: 40)
+                .background(yellow)
+                .opacity(enabled ? 1.0 : 0.5)
+                .modifier(buttonBorder)
+        }
+        .disabled(!enabled)
     }
 }
 
@@ -140,7 +182,8 @@ struct ContentView: View {
             emoji: Emoji("🦆")!,
             position: CGPoint(x: 0.5, y: 0.5),
             scale: 0.5,
-            rotation: Angle(radians: 0.5)
+            rotation: Angle(radians: 0.5),
+            isMirrored: false
         )
     ]
     @State private var recentEmojis: [Emoji] = ["🦆", "❤️", "🪿"].map {
@@ -180,7 +223,8 @@ struct ContentView: View {
                         emoji: emoji,
                         position: placementPosition,
                         scale: 0.3,
-                        rotation: Angle(degrees: 0)
+                        rotation: Angle(degrees: 0),
+                        isMirrored: false
                     ),
                     secondTouchState: nil
                 )
@@ -329,6 +373,7 @@ struct ContentView: View {
         if let canvasFrame = canvasFrame {
             Text(placement.emoji.stringValue)
                 .font(.system(size: canvasFrame.height * placement.scale))
+                .scaleEffect(x: placement.isMirrored ? -1 : 1, y: 1)
                 .rotationEffect(placement.rotation)
                 .position(placement.position * canvasFrame.height + offset)
         } else {
@@ -358,23 +403,20 @@ struct ContentView: View {
                 )
 
                 HStack(spacing: 10) {
-                    let button = { (icon: String) in
-                        Button(action: {}) {
-                            Image(systemName: icon)
-                                .font(.system(size: 20, weight: .heavy))
-                                .foregroundColor(buttonIconColor)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 40)
-                                .background(yellow)
-                                .modifier(buttonBorder)
+                    ActionButton(iconName: "arrow.uturn.backward", enabled: false) {}
+
+                    ActionButton(
+                        iconName: "arrow.left.and.right.righttriangle.left.righttriangle.right",
+                        enabled: activePlacementState != nil
+                    ) {
+                        if let dragState = activePlacementState {
+                            activePlacementState = dragState.with(
+                                isMirrored: !dragState.placement.isMirrored
+                            )
                         }
                     }
 
-                    button("arrow.uturn.backward")
-                    button(
-                        "arrow.left.and.right.righttriangle.left.righttriangle.right"
-                    )
-                    button("gearshape")
+                    ActionButton(iconName: "gearshape") {}
                 }
 
                 ScrollView(.horizontal, showsIndicators: false) {
