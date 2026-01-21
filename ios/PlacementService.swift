@@ -2,19 +2,8 @@ import SwiftUI
 
 enum Action {
     case clear
-    case undo
+    case undo(id: String)
     case place(Placement)
-}
-
-extension Array {
-    fileprivate func removingLastWhere(_ predicate: (Element) -> Bool)
-        -> [Element]
-    {
-        guard let index = lastIndex(where: predicate) else { return self }
-        var copy = self
-        copy.remove(at: index)
-        return copy
-    }
 }
 
 @Observable class PlacementService {
@@ -25,9 +14,9 @@ extension Array {
             switch action {
             case .clear:
                 placements = []
-            case .undo:
-                placements = placements.removingLastWhere { placement in
-                    placement.userId == userId
+            case .undo(let id):
+                placements = placements.filter { placement in
+                    placement.id != id
                 }
             case .place(let newPlacement):
                 placements.append(newPlacement)
@@ -35,8 +24,8 @@ extension Array {
         }
         return placements
     }
-    var canUndo: Bool {
-        placements.contains(where: { placement in placement.userId == userId })
+    var undoablePlacementId: String? {
+        placements.last(where: { placement in placement.userId == userId })?.id
     }
 
     private var unsyncedActions: [Action] = []
@@ -49,11 +38,14 @@ extension Array {
     }
 
     func place(_ placement: Placement) {
-        unsyncedActions.append(.place(placement))
+        unsyncedActions.append(
+            .place(placement.with(userId: userId, id: UUID().uuidString))
+        )
     }
 
     func undo() {
-        unsyncedActions.append(Action.undo)
+        guard let undoablePlacementId else { return }
+        unsyncedActions.append(Action.undo(id: undoablePlacementId))
     }
 
     func clear() {

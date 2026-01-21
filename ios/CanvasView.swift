@@ -369,7 +369,7 @@ struct CanvasView: View {
                 HStack(spacing: 10) {
                     ActionButton(
                         iconName: "arrow.uturn.backward",
-                        enabled: placementService.canUndo,
+                        enabled: placementService.undoablePlacementId != nil,
                         action: placementService.undo,
                     )
 

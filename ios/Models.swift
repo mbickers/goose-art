@@ -46,18 +46,6 @@ struct Placement: Codable {
     let userId: String
     let id: String
 
-    func with(userId: String) -> Placement {
-        return Placement(
-            emoji: emoji,
-            position: position,
-            scale: scale,
-            rotation: rotation,
-            isMirrored: isMirrored,
-            userId: userId,
-            id: id
-        )
-    }
-
     var hasValidPosition: Bool {
         return CGRect(x: 0, y: 0, width: 1, height: 1).contains(position)
     }
