@@ -302,36 +302,36 @@ struct CanvasView: View {
 
     private var emojiTextField: some View {
         ZStack {
-            TextField(
-                "",
-                text: $emojiFieldValue,
-                prompt: Text("+")
-                    .font(.system(size: 40, weight: .regular))
+            if emojiFieldValue == "" {
+                Image(systemName: "plus")
+                    .font(.system(size: 30, weight: .semibold))
                     .foregroundColor(buttonIconColor)
-            )
-            .focused($emojiFieldFocused)
-            .onAppear { emojiFieldFocused = true }
-            .multilineTextAlignment(.center)
-            .onChange(of: emojiFieldValue) {
-                oldValue,
-                newValue
-                in
-                emojiFieldValue =
-                    lastEmojiInString(newValue)?.stringValue
-                    ?? ""
             }
-            .onChange(of: emojiFieldFocused) {
-                oldValue,
-                isFocused in
-                if !isFocused,
-                    let emoji = lastEmojiInString(
-                        emojiFieldValue
-                    )
-                {
-                    recentEmojisStore.emojiUsed(emoji)
+
+            TextField("", text: $emojiFieldValue)
+                .focused($emojiFieldFocused)
+                .onAppear { emojiFieldFocused = true }
+                .multilineTextAlignment(.center)
+                .onChange(of: emojiFieldValue) {
+                    oldValue,
+                    newValue
+                    in
+                    emojiFieldValue =
+                        lastEmojiInString(newValue)?.stringValue
+                        ?? ""
                 }
-                emojiFieldValue = ""
-            }
+                .onChange(of: emojiFieldFocused) {
+                    oldValue,
+                    isFocused in
+                    if !isFocused,
+                        let emoji = lastEmojiInString(
+                            emojiFieldValue
+                        )
+                    {
+                        recentEmojisStore.emojiUsed(emoji)
+                    }
+                    emojiFieldValue = ""
+                }
 
             // Using hacky ZStack because attaching the gesture directly to the TextField interacted badly with TextField interactions. Tried
             // - using .gesture, including sequencing with LongPressGesture (never triggered)
