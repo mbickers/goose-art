@@ -82,11 +82,14 @@ struct RoundedBorder: ViewModifier {
     let lineWidth: CGFloat
 
     func body(content: Content) -> some View {
+        let shape = RoundedRectangle(
+            cornerRadius: cornerRadius,
+            style: .continuous
+        )
         content
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .clipShape(shape)
             .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(darkPurple, lineWidth: lineWidth)
+                shape.stroke(darkPurple, lineWidth: lineWidth)
             )
             .padding(lineWidth / 2)
     }
