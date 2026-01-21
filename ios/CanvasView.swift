@@ -17,16 +17,9 @@ struct ActivePlacementState {
         self.secondTouchState = secondTouchState
     }
 
-    func with(position: CGPoint) -> ActivePlacementState {
+    func with(placement: Placement) -> ActivePlacementState {
         return ActivePlacementState(
-            placement: Placement(
-                emoji: placement.emoji,
-                position: position,
-                scale: placement.scale,
-                rotation: placement.rotation,
-                isMirrored: placement.isMirrored,
-                userId: placement.userId,
-            ),
+            placement: placement,
             secondTouchState: secondTouchState
         )
     }
@@ -34,34 +27,6 @@ struct ActivePlacementState {
     func with(secondTouchState: SecondTouchState?) -> ActivePlacementState {
         return ActivePlacementState(
             placement: placement,
-            secondTouchState: secondTouchState
-        )
-    }
-
-    func with(scale: CGFloat, rotation: CGFloat) -> ActivePlacementState {
-        return ActivePlacementState(
-            placement: Placement(
-                emoji: placement.emoji,
-                position: placement.position,
-                scale: scale,
-                rotation: rotation,
-                isMirrored: placement.isMirrored,
-                userId: placement.userId
-            ),
-            secondTouchState: secondTouchState
-        )
-    }
-
-    func with(isMirrored: Bool) -> ActivePlacementState {
-        return ActivePlacementState(
-            placement: Placement(
-                emoji: placement.emoji,
-                position: placement.position,
-                scale: placement.scale,
-                rotation: placement.rotation,
-                isMirrored: isMirrored,
-                userId: placement.userId
-            ),
             secondTouchState: secondTouchState
         )
     }
@@ -202,10 +167,8 @@ struct CanvasView: View {
                     globalPoint: value.location
                 )
             else { return }
-            self.activePlacementState =
-                activePlacementState?.with(
-                    position: placementPosition
-                )
+            let activePlacementState =
+                activePlacementState
                 ?? ActivePlacementState(
                     placement: Placement(
                         emoji: emoji,
@@ -213,10 +176,17 @@ struct CanvasView: View {
                         scale: 0.3,
                         rotation: 0,
                         isMirrored: false,
-                        userId: placementService.userId
+                        userId: placementService.userId,
+                        id: UUID().uuidString,
                     ),
                     secondTouchState: nil
                 )
+            self.activePlacementState = activePlacementState.with(
+                placement:
+                    activePlacementState.placement.with(
+                        position: placementPosition
+                    )
+            )
         }.onEnded { value in
             guard let activePlacementState else { return }
 
@@ -289,8 +259,10 @@ struct CanvasView: View {
             let newRotation = secondTouchState.baseRotation + rotationDelta
 
             self.activePlacementState = dragState.with(
-                scale: clampedScale,
-                rotation: newRotation
+                placement: dragState.placement.with(
+                    scale: clampedScale,
+                    rotation: newRotation
+                )
             )
         }.onEnded {
             _ in
@@ -408,7 +380,9 @@ struct CanvasView: View {
                     ) {
                         if let dragState = activePlacementState {
                             activePlacementState = dragState.with(
-                                isMirrored: !dragState.placement.isMirrored
+                                placement: dragState.placement.with(
+                                    isMirrored: !dragState.placement.isMirrored
+                                )
                             )
                         }
                     }

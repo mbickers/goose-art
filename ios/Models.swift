@@ -44,6 +44,7 @@ struct Placement: Codable {
     let rotation: CGFloat
     let isMirrored: Bool
     let userId: String
+    let id: String
 
     func with(userId: String) -> Placement {
         return Placement(
@@ -52,11 +53,31 @@ struct Placement: Codable {
             scale: scale,
             rotation: rotation,
             isMirrored: isMirrored,
-            userId: userId
+            userId: userId,
+            id: id
         )
     }
 
     var hasValidPosition: Bool {
         return CGRect(x: 0, y: 0, width: 1, height: 1).contains(position)
+    }
+
+    func with(
+        position: CGPoint? = nil,
+        scale: CGFloat? = nil,
+        rotation: CGFloat? = nil,
+        isMirrored: Bool? = nil,
+        userId: String? = nil,
+        id: String? = nil,
+    ) -> Placement {
+        return Placement(
+            emoji: emoji,
+            position: position ?? self.position,
+            scale: scale ?? self.scale,
+            rotation: rotation ?? self.rotation,
+            isMirrored: isMirrored ?? self.isMirrored,
+            userId: userId ?? self.userId,
+            id: id ?? self.id
+        )
     }
 }
