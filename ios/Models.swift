@@ -1,5 +1,5 @@
-import Foundation
 import CoreGraphics
+import Foundation
 
 struct Emoji: Equatable, Codable, Hashable {
     let value: Character
@@ -29,8 +29,8 @@ struct Emoji: Equatable, Codable, Hashable {
     }
 }
 
-fileprivate extension Character {
-    var isEmoji: Bool {
+extension Character {
+    fileprivate var isEmoji: Bool {
         guard let firstScalar = unicodeScalars.first else { return false }
         return firstScalar.properties.isEmojiPresentation
             || (unicodeScalars.count > 1 && firstScalar.properties.isEmoji)
@@ -43,19 +43,17 @@ struct Placement: Codable {
     let scale: CGFloat
     let rotation: CGFloat
     let isMirrored: Bool
+    let userId: String
 
-    init(
-        emoji: Emoji,
-        position: CGPoint,
-        scale: CGFloat,
-        rotation: CGFloat,
-        isMirrored: Bool
-    ) {
-        self.emoji = emoji
-        self.position = position
-        self.scale = scale
-        self.rotation = rotation
-        self.isMirrored = isMirrored
+    func with(userId: String) -> Placement {
+        return Placement(
+            emoji: emoji,
+            position: position,
+            scale: scale,
+            rotation: rotation,
+            isMirrored: isMirrored,
+            userId: userId
+        )
     }
 
     var hasValidPosition: Bool {

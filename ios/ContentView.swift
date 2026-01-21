@@ -24,7 +24,8 @@ struct ActivePlacementState {
                 position: position,
                 scale: placement.scale,
                 rotation: placement.rotation,
-                isMirrored: placement.isMirrored
+                isMirrored: placement.isMirrored,
+                userId: placement.userId,
             ),
             secondTouchState: secondTouchState
         )
@@ -44,7 +45,8 @@ struct ActivePlacementState {
                 position: placement.position,
                 scale: scale,
                 rotation: rotation,
-                isMirrored: placement.isMirrored
+                isMirrored: placement.isMirrored,
+                userId: placement.userId
             ),
             secondTouchState: secondTouchState
         )
@@ -57,7 +59,8 @@ struct ActivePlacementState {
                 position: placement.position,
                 scale: placement.scale,
                 rotation: placement.rotation,
-                isMirrored: isMirrored
+                isMirrored: isMirrored,
+                userId: placement.userId
             ),
             secondTouchState: secondTouchState
         )
@@ -206,7 +209,8 @@ struct ContentView: View {
                         position: placementPosition,
                         scale: 0.3,
                         rotation: 0,
-                        isMirrored: false
+                        isMirrored: false,
+                        userId: placementService.userId
                     ),
                     secondTouchState: nil
                 )
