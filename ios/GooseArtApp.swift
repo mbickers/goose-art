@@ -7,7 +7,7 @@ struct GooseArtApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView(
+            CanvasView(
                 placementService: placementService,
                 recentEmojisStore: recentEmojiStore
             )

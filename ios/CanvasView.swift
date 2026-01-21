@@ -169,7 +169,7 @@ struct Debug: View {
 
 private let buttonIconColor = darkPurple.opacity(0.5)
 
-struct ContentView: View {
+struct CanvasView: View {
     let placementService: PlacementService
     let recentEmojisStore: RecentEmojiService
 
@@ -451,7 +451,7 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView(
+    CanvasView(
         placementService: PlacementService(),
         recentEmojisStore: RecentEmojiService()
     )
