@@ -6,12 +6,20 @@ enum Action {
     case place(Placement)
 }
 
+struct SequencedAction {
+    let action: Action
+    let deviceSequenceNumber: Int
+}
+
 @Observable class PlacementService {
     let userId: String
+    private var deviceSequenceNumber: Int
+    private var greatestSeenServerSequenceNumber: Int
+
     var placements: [Placement] {
         var placements = syncedState
-        for action in unsyncedActions {
-            switch action {
+        for sequencedAction in unsyncedActions {
+            switch sequencedAction.action {
             case .clear:
                 placements = []
             case .undo(let id):
@@ -28,27 +36,53 @@ enum Action {
         placements.last(where: { placement in placement.userId == userId })?.id
     }
 
-    private var unsyncedActions: [Action] = []
+    private var unsyncedActions: [SequencedAction] = []
     private var syncedState: [Placement] = []
 
     init() {
         self.syncedState = []
         self.unsyncedActions = []
         self.userId = "max"
+        self.deviceSequenceNumber = 0
+        self.greatestSeenServerSequenceNumber = 0
     }
 
     func place(_ placement: Placement) {
-        unsyncedActions.append(
+        action(
             .place(placement.with(userId: userId, id: UUID().uuidString))
         )
     }
 
     func undo() {
         guard let undoablePlacementId else { return }
-        unsyncedActions.append(Action.undo(id: undoablePlacementId))
+        action(.undo(id: undoablePlacementId))
     }
 
     func clear() {
-        unsyncedActions.append(Action.clear)
+        action(.clear)
+    }
+
+    private func action(_ action: Action) {
+        deviceSequenceNumber += 1
+        let sequencedAction = SequencedAction(
+            action: action,
+            deviceSequenceNumber: deviceSequenceNumber
+        )
+        unsyncedActions.append(sequencedAction)
+    }
+
+    func serverUpdate(
+        serverSequenceNumber: Int,
+        greatestSeenDeviceSequenceNumber: Int,
+        syncedPlacements: [Placement]
+    ) {
+        unsyncedActions.removeAll { sequencedAction in
+            sequencedAction.deviceSequenceNumber <= greatestSeenDeviceSequenceNumber
+        }
+        
+        if serverSequenceNumber > greatestSeenServerSequenceNumber {
+            syncedState = syncedPlacements
+            greatestSeenServerSequenceNumber = serverSequenceNumber
+        }
     }
 }
