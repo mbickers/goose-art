@@ -61,8 +61,11 @@ class ClearAction:
     pass
 
 
+Action = PlacementAction | UndoAction | ClearAction
+
+
 @dataclass(kw_only=True)
-class Action:
+class SequencedAction:
     action: PlacementAction | UndoAction | ClearAction
     sequence_number: int
 

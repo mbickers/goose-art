@@ -3,7 +3,7 @@ from typing import Any, Callable
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 from canvas_service import CanvasService
-from canvas_types import Action, Placement
+from canvas_types import SequencedAction, Placement
 
 app = FastAPI()
 
@@ -25,8 +25,8 @@ def serialize_server_message(
     }
 
 
-def deserialize_client_message(data: dict[str, Any]) -> list[Action]:
-    return [Action.from_json(action_data) for action_data in data["actions"]]
+def deserialize_client_message(data: dict[str, Any]) -> list[SequencedAction]:
+    return [SequencedAction.from_json(action_data) for action_data in data["actions"]]
 
 
 # TODO: auth

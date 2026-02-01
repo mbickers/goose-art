@@ -1,7 +1,7 @@
 from typing import Protocol
 
 from canvas_types import (
-    Action,
+    SequencedAction,
     ClearAction,
     Placement,
     PlacementAction,
@@ -25,7 +25,7 @@ class CanvasService:
         self.subscribers: list[PlacementsSubscriber] = []
         self.greatest_seen_device_sequence_numbers: dict[str, int] = {}
 
-    def process_actions(self, actions: list[Action], *, device_id: str):
+    def process_actions(self, actions: list[SequencedAction], *, device_id: str):
         if device_id not in self.greatest_seen_device_sequence_numbers:
             self.greatest_seen_device_sequence_numbers[device_id] = 0
         actions = [
