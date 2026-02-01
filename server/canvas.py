@@ -40,7 +40,6 @@ class PlacementsSubscriber(Protocol):
     def __call__(
         self,
         *,
-        server_sequence_number: int,
         placements: list[Placement],
         greatest_seen_device_sequence_numbers: dict[str, int],
     ):
@@ -50,7 +49,6 @@ class PlacementsSubscriber(Protocol):
 class CanvasState:
     def __init__(self):
         self.placements: list[Placement] = []
-        self.server_sequence_number = 0
         self.subscribers: list[PlacementsSubscriber] = []
         self.greatest_seen_device_sequence_numbers = {}
 
@@ -87,10 +85,8 @@ class CanvasState:
         self.on_change()
 
     def on_change(self):
-        self.server_sequence_number += 1
         for subscriber in self.subscribers:
             subscriber(
-                server_sequence_number=self.server_sequence_number,
                 placements=self.placements,
                 greatest_seen_device_sequence_numbers=self.greatest_seen_device_sequence_numbers,
             )
@@ -98,7 +94,6 @@ class CanvasState:
     def subscribe(self, subscriber: PlacementsSubscriber, *, call_on_subscribe: bool):
         if call_on_subscribe:
             subscriber(
-                server_sequence_number=self.server_sequence_number,
                 placements=self.placements,
                 greatest_seen_device_sequence_numbers=self.greatest_seen_device_sequence_numbers,
             )

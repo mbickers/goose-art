@@ -20,13 +20,12 @@ class ClientMessage(BaseModel):
 
 
 class ServerMessage(BaseModel):
-    server_sequence_number: int
     greatest_seen_device_sequence_number: int
     placements: list[Placement]
 
 
 # TODO: auth
-@app.websocket("/canvas/v1")
+@app.websocket("/canvas")
 async def canvas_handler(websocket: WebSocket, user_id: str, device_id: str):
     canvas = users.get(user_id)
     if not canvas:
@@ -37,12 +36,10 @@ async def canvas_handler(websocket: WebSocket, user_id: str, device_id: str):
 
     def canvas_subscriber(
         *,
-        server_sequence_number: int,
         placements: list[Placement],
         greatest_seen_device_sequence_numbers: dict[str, int],
     ):
         msg = ServerMessage(
-            server_sequence_number=server_sequence_number,
             greatest_seen_device_sequence_number=greatest_seen_device_sequence_numbers.get(
                 device_id, 0
             ),
@@ -73,7 +70,6 @@ async def canvas_handler(websocket: WebSocket, user_id: str, device_id: str):
 async def inspect_canvas(user_id: str):
     canvas = users[user_id]
     return {
-        "server_sequence_number": canvas.server_sequence_number,
         "placements": [p.model_dump() for p in canvas.placements],
         "greatest_seen_device_sequence_numbers": canvas.greatest_seen_device_sequence_numbers,
     }
