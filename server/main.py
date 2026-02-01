@@ -3,7 +3,7 @@ from typing import Callable
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
-from canvas import Action, CanvasState, Placement
+from canvas_service import Action, CanvasState, Placement
 
 app = FastAPI()
 
