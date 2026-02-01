@@ -14,7 +14,6 @@ struct SequencedAction {
 @Observable class PlacementService {
     let userId: String
     private var deviceSequenceNumber: Int
-    private var greatestSeenServerSequenceNumber: Int
 
     var placements: [Placement] {
         var placements = syncedState
@@ -44,7 +43,6 @@ struct SequencedAction {
         self.unsyncedActions = []
         self.userId = "max"
         self.deviceSequenceNumber = 0
-        self.greatestSeenServerSequenceNumber = 0
     }
 
     func place(_ placement: Placement) {
@@ -72,7 +70,6 @@ struct SequencedAction {
     }
 
     func serverUpdate(
-        serverSequenceNumber: Int,
         greatestSeenDeviceSequenceNumber: Int,
         syncedPlacements: [Placement]
     ) {
@@ -80,9 +77,7 @@ struct SequencedAction {
             sequencedAction.deviceSequenceNumber <= greatestSeenDeviceSequenceNumber
         }
         
-        if serverSequenceNumber > greatestSeenServerSequenceNumber {
-            syncedState = syncedPlacements
-            greatestSeenServerSequenceNumber = serverSequenceNumber
-        }
+        syncedState = syncedPlacements
+        greatestSeenServerSequenceNumber = serverSequenceNumber
     }
 }

@@ -17,7 +17,6 @@ users: dict[str, CanvasState] = {
 
 class ClientMessage(BaseModel):
     actions: list[Action]
-    greatest_seen_server_sequence_numbere: int
 
 
 class ServerMessage(BaseModel):
