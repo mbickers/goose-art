@@ -1,16 +1,5 @@
 import SwiftUI
 
-enum Action {
-    case clear
-    case undo(id: String)
-    case place(Placement)
-}
-
-struct SequencedAction {
-    let action: Action
-    let deviceSequenceNumber: Int
-}
-
 @Observable class FrontendCanvasService {
     let userId: String
     private var deviceSequenceNumber: Int
