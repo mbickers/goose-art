@@ -1,43 +1,12 @@
-from dataclasses import dataclass
 from typing import Protocol
 
-
-@dataclass(kw_only=True)
-class Position:
-    x: float
-    y: float
-
-
-@dataclass(kw_only=True)
-class Placement:
-    id: str
-    emoji: str
-    position: Position
-    scale: float
-    rotation: float
-    is_mirrored: bool
-    user_id: str
-
-
-@dataclass(kw_only=True)
-class PlacementAction:
-    placement: Placement
-
-
-@dataclass(kw_only=True)
-class UndoAction:
-    id: str
-
-
-@dataclass(kw_only=True)
-class ClearAction:
-    pass
-
-
-@dataclass(kw_only=True)
-class Action:
-    action: PlacementAction | UndoAction | ClearAction
-    sequence_number: int
+from canvas_types import (
+    Action,
+    ClearAction,
+    Placement,
+    PlacementAction,
+    UndoAction,
+)
 
 
 class PlacementsSubscriber(Protocol):

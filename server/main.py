@@ -2,15 +2,8 @@ import asyncio
 from typing import Any, Callable
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
-from canvas_service import (
-    Action,
-    CanvasService,
-    ClearAction,
-    Placement,
-    PlacementAction,
-    Position,
-    UndoAction,
-)
+from canvas_service import CanvasService
+from canvas_types import Action, Placement
 
 app = FastAPI()
 
@@ -28,48 +21,12 @@ def serialize_server_message(
 ) -> dict[str, Any]:
     return {
         "greatestSeenDeviceSequenceNumber": greatest_seen_device_sequence_number,
-        "placements": [
-            {
-                "id": p.id,
-                "emoji": p.emoji,
-                "position": {"x": p.position.x, "y": p.position.y},
-                "scale": p.scale,
-                "rotation": p.rotation,
-                "isMirrored": p.is_mirrored,
-                "userId": p.user_id,
-            }
-            for p in placements
-        ],
+        "placements": [p.to_json() for p in placements],
     }
 
 
 def deserialize_client_message(data: dict[str, Any]) -> list[Action]:
-    actions = []
-    for action_data in data["actions"]:
-        sequence_number = action_data["sequenceNumber"]
-        inner = action_data["action"]
-
-        if "placement" in inner:
-            p = inner["placement"]
-            action = PlacementAction(
-                placement=Placement(
-                    id=p["id"],
-                    emoji=p["emoji"],
-                    position=Position(x=p["position"]["x"], y=p["position"]["y"]),
-                    scale=p["scale"],
-                    rotation=p["rotation"],
-                    is_mirrored=p["isMirrored"],
-                    user_id=p["userId"],
-                )
-            )
-        elif "id" in inner:
-            action = UndoAction(id=inner["id"])
-        else:
-            action = ClearAction()
-
-        actions.append(Action(action=action, sequence_number=sequence_number))
-
-    return actions
+    return [Action.from_json(action_data) for action_data in data["actions"]]
 
 
 # TODO: auth
@@ -116,17 +73,6 @@ async def canvas_handler(websocket: WebSocket, user_id: str, device_id: str):
 async def inspect_canvas(user_id: str):
     canvas = users[user_id]
     return {
-        "placements": [
-            {
-                "id": p.id,
-                "emoji": p.emoji,
-                "position": {"x": p.position.x, "y": p.position.y},
-                "scale": p.scale,
-                "rotation": p.rotation,
-                "isMirrored": p.is_mirrored,
-                "userId": p.user_id,
-            }
-            for p in canvas.placements
-        ],
+        "placements": [p.to_json() for p in canvas.placements],
         "greatestSeenDeviceSequenceNumbers": canvas.greatest_seen_device_sequence_numbers,
     }
