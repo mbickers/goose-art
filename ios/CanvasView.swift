@@ -138,7 +138,7 @@ struct Debug: View {
 private let buttonIconColor = darkPurple.opacity(0.5)
 
 struct CanvasView: View {
-    let placementService: CanvasService
+    let placementService: FrontendCanvasService
     let recentEmojisStore: RecentEmojiService
 
     @State private var emojiFieldValue: String = ""
@@ -429,7 +429,7 @@ struct CanvasView: View {
 
 #Preview {
     CanvasView(
-        placementService: CanvasService(),
+        placementService: FrontendCanvasService(),
         recentEmojisStore: RecentEmojiService()
     )
 }

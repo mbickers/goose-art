@@ -11,7 +11,7 @@ struct SequencedAction {
     let deviceSequenceNumber: Int
 }
 
-@Observable class CanvasService {
+@Observable class FrontendCanvasService {
     let userId: String
     private var deviceSequenceNumber: Int
 
