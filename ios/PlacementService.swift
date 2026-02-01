@@ -78,6 +78,5 @@ struct SequencedAction {
         }
         
         syncedState = syncedPlacements
-        greatestSeenServerSequenceNumber = serverSequenceNumber
     }
 }
