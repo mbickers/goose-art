@@ -1,37 +1,41 @@
-from typing import Literal, Protocol
-from pydantic import BaseModel
+from dataclasses import dataclass
+from typing import Protocol
 
 
-class Position(BaseModel):
+@dataclass(kw_only=True)
+class Position:
     x: float
     y: float
 
 
-class Placement(BaseModel):
+@dataclass(kw_only=True)
+class Placement:
     id: str
     emoji: str
     position: Position
     scale: float
     rotation: float
-    isMirrored: bool
-    userId: str
+    is_mirrored: bool
+    user_id: str
 
 
-class PlacementAction(BaseModel):
-    type: Literal["place"]
+@dataclass(kw_only=True)
+class PlacementAction:
     placement: Placement
 
 
-class UndoAction(BaseModel):
-    type: Literal["undo"]
+@dataclass(kw_only=True)
+class UndoAction:
     id: str
 
 
-class ClearAction(BaseModel):
-    type: Literal["clear"]
+@dataclass(kw_only=True)
+class ClearAction:
+    pass
 
 
-class Action(BaseModel):
+@dataclass(kw_only=True)
+class Action:
     action: PlacementAction | UndoAction | ClearAction
     sequence_number: int
 
@@ -46,11 +50,11 @@ class PlacementsSubscriber(Protocol):
         pass
 
 
-class CanvasState:
+class CanvasService:
     def __init__(self):
         self.placements: list[Placement] = []
         self.subscribers: list[PlacementsSubscriber] = []
-        self.greatest_seen_device_sequence_numbers = {}
+        self.greatest_seen_device_sequence_numbers: dict[str, int] = {}
 
     def process_actions(self, actions: list[Action], *, device_id: str):
         if device_id not in self.greatest_seen_device_sequence_numbers:

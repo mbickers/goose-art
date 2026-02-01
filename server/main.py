@@ -1,27 +1,75 @@
 import asyncio
-from typing import Callable
+from typing import Any, Callable
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
 
-from canvas_service import Action, CanvasState, Placement
+from canvas_service import (
+    Action,
+    CanvasService,
+    ClearAction,
+    Placement,
+    PlacementAction,
+    Position,
+    UndoAction,
+)
 
 app = FastAPI()
 
 
-canvas = CanvasState()
-users: dict[str, CanvasState] = {
+canvas = CanvasService()
+users: dict[str, CanvasService] = {
     "max": canvas,
     "brian": canvas,
 }
 
 
-class ClientMessage(BaseModel):
-    actions: list[Action]
+def serialize_server_message(
+    placements: list[Placement],
+    greatest_seen_device_sequence_number: int,
+) -> dict[str, Any]:
+    return {
+        "greatestSeenDeviceSequenceNumber": greatest_seen_device_sequence_number,
+        "placements": [
+            {
+                "id": p.id,
+                "emoji": p.emoji,
+                "position": {"x": p.position.x, "y": p.position.y},
+                "scale": p.scale,
+                "rotation": p.rotation,
+                "isMirrored": p.is_mirrored,
+                "userId": p.user_id,
+            }
+            for p in placements
+        ],
+    }
 
 
-class ServerMessage(BaseModel):
-    greatest_seen_device_sequence_number: int
-    placements: list[Placement]
+def deserialize_client_message(data: dict[str, Any]) -> list[Action]:
+    actions = []
+    for action_data in data["actions"]:
+        sequence_number = action_data["sequenceNumber"]
+        inner = action_data["action"]
+
+        if "placement" in inner:
+            p = inner["placement"]
+            action = PlacementAction(
+                placement=Placement(
+                    id=p["id"],
+                    emoji=p["emoji"],
+                    position=Position(x=p["position"]["x"], y=p["position"]["y"]),
+                    scale=p["scale"],
+                    rotation=p["rotation"],
+                    is_mirrored=p["isMirrored"],
+                    user_id=p["userId"],
+                )
+            )
+        elif "id" in inner:
+            action = UndoAction(id=inner["id"])
+        else:
+            action = ClearAction()
+
+        actions.append(Action(action=action, sequence_number=sequence_number))
+
+    return actions
 
 
 # TODO: auth
@@ -39,20 +87,18 @@ async def canvas_handler(websocket: WebSocket, user_id: str, device_id: str):
         placements: list[Placement],
         greatest_seen_device_sequence_numbers: dict[str, int],
     ):
-        msg = ServerMessage(
-            greatest_seen_device_sequence_number=greatest_seen_device_sequence_numbers.get(
-                device_id, 0
-            ),
-            placements=placements,
+        msg = serialize_server_message(
+            placements,
+            greatest_seen_device_sequence_numbers.get(device_id, 0),
         )
-        asyncio.create_task(websocket.send_json(msg.model_dump()))
+        asyncio.create_task(websocket.send_json(msg))
 
     unsubscribe: Callable[[], None] | None = None
     try:
         while True:
             data = await websocket.receive_json()
-            message = ClientMessage.model_validate(data)
-            canvas.process_actions(message.actions, device_id=device_id)
+            actions = deserialize_client_message(data)
+            canvas.process_actions(actions, device_id=device_id)
             if unsubscribe is None:
                 unsubscribe = canvas.subscribe(
                     canvas_subscriber, call_on_subscribe=True
@@ -70,6 +116,17 @@ async def canvas_handler(websocket: WebSocket, user_id: str, device_id: str):
 async def inspect_canvas(user_id: str):
     canvas = users[user_id]
     return {
-        "placements": [p.model_dump() for p in canvas.placements],
-        "greatest_seen_device_sequence_numbers": canvas.greatest_seen_device_sequence_numbers,
+        "placements": [
+            {
+                "id": p.id,
+                "emoji": p.emoji,
+                "position": {"x": p.position.x, "y": p.position.y},
+                "scale": p.scale,
+                "rotation": p.rotation,
+                "isMirrored": p.is_mirrored,
+                "userId": p.user_id,
+            }
+            for p in canvas.placements
+        ],
+        "greatestSeenDeviceSequenceNumbers": canvas.greatest_seen_device_sequence_numbers,
     }
