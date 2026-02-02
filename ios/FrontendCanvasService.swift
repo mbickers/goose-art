@@ -65,7 +65,8 @@ import SwiftUI
         unsyncedActions.removeAll { sequencedAction in
             sequencedAction.deviceSequenceNumber <= greatestSeenDeviceSequenceNumber
         }
-        
+        // avoid server rejecting actions if client crashes after sending an update
+        deviceSequenceNumber = max(deviceSequenceNumber, greatestSeenDeviceSequenceNumber)
         syncedState = syncedPlacements
     }
 }
