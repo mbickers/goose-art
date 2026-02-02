@@ -5,7 +5,7 @@ import SwiftUI
     private var deviceSequenceNumber: Int
 
     var placements: [Placement] {
-        var placements = syncedState
+        var placements = syncedPlacements
         for sequencedAction in unsyncedActions {
             switch sequencedAction.action {
             case .clear:
@@ -25,10 +25,10 @@ import SwiftUI
     }
 
     private var unsyncedActions: [SequencedAction] = []
-    private var syncedState: [Placement] = []
+    private var syncedPlacements: [Placement] = []
 
     init() {
-        self.syncedState = []
+        self.syncedPlacements = []
         self.unsyncedActions = []
         self.userId = "max"
         self.deviceSequenceNumber = 0
@@ -60,13 +60,13 @@ import SwiftUI
 
     func serverUpdate(
         greatestSeenDeviceSequenceNumber: Int,
-        syncedPlacements: [Placement]
+        placements: [Placement]
     ) {
         unsyncedActions.removeAll { sequencedAction in
             sequencedAction.deviceSequenceNumber <= greatestSeenDeviceSequenceNumber
         }
         // avoid server rejecting actions if client crashes after sending an update
         deviceSequenceNumber = max(deviceSequenceNumber, greatestSeenDeviceSequenceNumber)
-        syncedState = syncedPlacements
+        syncedPlacements = placements
     }
 }
