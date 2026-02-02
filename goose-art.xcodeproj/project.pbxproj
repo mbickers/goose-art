@@ -7,10 +7,16 @@
 	objects = {
 
 /* Begin PBXFileReference section */
+		506A682E2F301A8300FB37AD /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		50CB95B02F1C23DF005BDAE0 /* goose-art.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "goose-art.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		506A6C372F301A8300FB37AD /* server */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = server;
+			sourceTree = "<group>";
+		};
 		50CB95B22F1C23DF005BDAE0 /* ios */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = ios;
@@ -32,6 +38,8 @@
 		50CB95A72F1C23DE005BDAE0 = {
 			isa = PBXGroup;
 			children = (
+				506A682E2F301A8300FB37AD /* README.md */,
+				506A6C372F301A8300FB37AD /* server */,
 				50CB95B22F1C23DF005BDAE0 /* ios */,
 				50CB95B12F1C23DF005BDAE0 /* Products */,
 			);
