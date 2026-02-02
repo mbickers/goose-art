@@ -5,14 +5,12 @@ class CanvasClient {
     private let userId: String
     private let deviceId: String
     private var webSocketTask: URLSessionWebSocketTask?
-    private var shouldReconnect = true
     private let reconnectDelay: TimeInterval = 1.0
 
-    private(set) var isConnected: Bool = false
-    private let onServerMessage: ((ServerMessage) -> Void)?
+    private let onServerMessage: (ServerMessage) -> Void
     private let onError: ((String) -> Void)?
 
-    init(baseURL: URL, userId: String, deviceId: String, onServerMessage: ((ServerMessage) -> Void)? = nil, onError: ((String) -> Void)? = nil) {
+    init(baseURL: URL, userId: String, deviceId: String, onServerMessage: @escaping (ServerMessage) -> Void, onError: ((String) -> Void)? = nil) {
         self.baseURL = baseURL
         self.userId = userId
         self.deviceId = deviceId
@@ -21,8 +19,6 @@ class CanvasClient {
     }
 
     func connect() async {
-        shouldReconnect = true
-
         var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
         components?.scheme = baseURL.scheme == "https" ? "wss" : "ws"
         components?.path = "/canvas"
@@ -36,29 +32,29 @@ class CanvasClient {
             return
         }
 
-        webSocketTask = URLSession.shared.webSocketTask(with: wsURL)
-        webSocketTask?.resume()
-        isConnected = true
+        while true {
+            if webSocketTask == nil {
+                let task = URLSession.shared.webSocketTask(with: wsURL)
+                webSocketTask = task
+                task.resume()
+            }
 
-        await receiveMessages()
-    }
+            let message: URLSessionWebSocketTask.Message
+            do {
+                message = try await webSocketTask!.receive()
+            } catch {
+                webSocketTask = nil
+                onError?("Error receiving message: \(error.localizedDescription)")
+                try? await Task.sleep(for: .seconds(reconnectDelay))
+                continue
+            }
 
-    func disconnect() async {
-        shouldReconnect = false
-        webSocketTask?.cancel(with: .normalClosure, reason: nil)
-        webSocketTask = nil
-        isConnected = false
-    }
-
-    private func reconnect() async {
-        guard shouldReconnect else { return }
-        try? await Task.sleep(for: .seconds(reconnectDelay))
-        guard shouldReconnect else { return }
-        await connect()
+            handleMessage(message)
+        }
     }
 
     func sendActions(_ actions: [SequencedAction]) async {
-        guard let webSocketTask = webSocketTask, isConnected else {
+        guard let webSocketTask = webSocketTask else {
             onError?("Error sending actions: not connected")
             return
         }
@@ -67,8 +63,7 @@ class CanvasClient {
 
         let data: Data
         do {
-            let encoder = JSONEncoder()
-            data = try encoder.encode(payload)
+            data = try JSONEncoder().encode(payload)
         } catch {
             onError?("Error encoding actions: \(error.localizedDescription)")
             return
@@ -77,27 +72,9 @@ class CanvasClient {
         do {
             try await webSocketTask.send(.data(data))
         } catch {
-            isConnected = false
+            self.webSocketTask = nil
             onError?("Error sending actions: \(error.localizedDescription)")
-            await reconnect()
         }
-    }
-
-    private func receiveMessages() async {
-        guard let webSocketTask = webSocketTask else { return }
-
-        let message: URLSessionWebSocketTask.Message
-        do {
-            message = try await webSocketTask.receive()
-        } catch {
-            isConnected = false
-            onError?("Error receiving message: \(error.localizedDescription)")
-            await reconnect()
-            return
-        }
-
-        handleMessage(message)
-        await receiveMessages()
     }
 
     private func handleMessage(_ message: URLSessionWebSocketTask.Message) {
@@ -125,7 +102,7 @@ class CanvasClient {
             return
         }
 
-        onServerMessage?(serverMessage)
+        onServerMessage(serverMessage)
     }
 }
 

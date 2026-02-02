@@ -68,16 +68,135 @@ struct Placement: Codable {
             id: id ?? self.id
         )
     }
+
+    enum CodingKeys: String, CodingKey {
+        case emoji
+        case position
+        case scale
+        case rotation
+        case isMirrored
+        case userId
+        case id
+    }
+
+    init(emoji: Emoji, position: CGPoint, scale: CGFloat, rotation: CGFloat, isMirrored: Bool, userId: String, id: String) {
+        self.emoji = emoji
+        self.position = position
+        self.scale = scale
+        self.rotation = rotation
+        self.isMirrored = isMirrored
+        self.userId = userId
+        self.id = id
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        self.emoji = try container.decode(Emoji.self, forKey: .emoji)
+
+        let positionDict = try container.decode([String: CGFloat].self, forKey: .position)
+        guard let x = positionDict["x"], let y = positionDict["y"] else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .position,
+                in: container,
+                debugDescription: "Position must have x and y values"
+            )
+        }
+        self.position = CGPoint(x: x, y: y)
+
+        self.scale = try container.decode(CGFloat.self, forKey: .scale)
+        self.rotation = try container.decode(CGFloat.self, forKey: .rotation)
+        self.isMirrored = try container.decode(Bool.self, forKey: .isMirrored)
+        self.userId = try container.decode(String.self, forKey: .userId)
+        self.id = try container.decode(String.self, forKey: .id)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        try container.encode(emoji, forKey: .emoji)
+        try container.encode(["x": position.x, "y": position.y], forKey: .position)
+        try container.encode(scale, forKey: .scale)
+        try container.encode(rotation, forKey: .rotation)
+        try container.encode(isMirrored, forKey: .isMirrored)
+        try container.encode(userId, forKey: .userId)
+        try container.encode(id, forKey: .id)
+    }
 }
 
 enum Action {
     case clear
-    case undo(id: String)
+    case undo(placementId: String)
     case place(Placement)
 }
 
-struct SequencedAction {
+struct SequencedAction: Codable {
     let action: Action
     let deviceSequenceNumber: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case action
+        case deviceSequenceNumber
+    }
+
+    private enum ActionCodingKeys: String, CodingKey {
+        case type
+        case placement
+        case placementId
+    }
+
+    init(action: Action, deviceSequenceNumber: Int) {
+        self.action = action
+        self.deviceSequenceNumber = deviceSequenceNumber
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let actionContainer = try container.nestedContainer(
+            keyedBy: ActionCodingKeys.self,
+            forKey: .action
+        )
+
+        let type = try actionContainer.decode(String.self, forKey: .type)
+        switch type {
+        case "place":
+            let placement = try actionContainer.decode(Placement.self, forKey: .placement)
+            self.action = .place(placement)
+        case "undo":
+            let placementId = try actionContainer.decode(String.self, forKey: .placementId)
+            self.action = .undo(placementId: placementId)
+        case "clear":
+            self.action = .clear
+        default:
+            throw DecodingError.dataCorruptedError(
+                forKey: .type,
+                in: actionContainer,
+                debugDescription: "Unknown action type: \(type)"
+            )
+        }
+
+        self.deviceSequenceNumber = try container.decode(Int.self, forKey: .deviceSequenceNumber)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        var actionContainer = container.nestedContainer(
+            keyedBy: ActionCodingKeys.self,
+            forKey: .action
+        )
+
+        switch action {
+        case .place(let placement):
+            try actionContainer.encode("place", forKey: .type)
+            try actionContainer.encode(placement, forKey: .placement)
+        case .undo(let placementId):
+            try actionContainer.encode("undo", forKey: .type)
+            try actionContainer.encode(placementId, forKey: .placementId)
+        case .clear:
+            try actionContainer.encode("clear", forKey: .type)
+        }
+
+        try container.encode(deviceSequenceNumber, forKey: .deviceSequenceNumber)
+    }
 }
 

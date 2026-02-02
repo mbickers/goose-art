@@ -42,7 +42,7 @@ import SwiftUI
 
     func undo() {
         guard let undoablePlacementId else { return }
-        action(.undo(id: undoablePlacementId))
+        action(.undo(placementId: undoablePlacementId))
     }
 
     func clear() {

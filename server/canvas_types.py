@@ -53,7 +53,7 @@ class PlacementAction:
 
 @dataclass(kw_only=True)
 class UndoAction:
-    id: str
+    placement_id: str
 
 
 @dataclass(kw_only=True)
@@ -67,17 +67,20 @@ Action = PlacementAction | UndoAction | ClearAction
 @dataclass(kw_only=True)
 class SequencedAction:
     action: PlacementAction | UndoAction | ClearAction
-    sequence_number: int
+    device_sequence_number: int
 
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> Self:
         inner = data["action"]
+        action_type = inner["type"]
 
-        if "placement" in inner:
+        if action_type == "place":
             action = PlacementAction(placement=Placement.from_json(inner["placement"]))
-        elif "id" in inner:
-            action = UndoAction(id=inner["id"])
-        else:
+        elif action_type == "undo":
+            action = UndoAction(placement_id=inner["placementId"])
+        elif action_type == "clear":
             action = ClearAction()
+        else:
+            raise ValueError(f"Unknown action type: {action_type}")
 
-        return cls(action=action, sequence_number=data["sequenceNumber"])
+        return cls(action=action, device_sequence_number=data["deviceSequenceNumber"])

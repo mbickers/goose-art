@@ -31,7 +31,7 @@ class CanvasService:
         actions = [
             action
             for action in actions
-            if action.sequence_number
+            if action.device_sequence_number
             > self.greatest_seen_device_sequence_numbers[device_id]
         ]
         if not actions:
@@ -39,14 +39,14 @@ class CanvasService:
 
         for action in actions:
             self.greatest_seen_device_sequence_numbers[device_id] = (
-                action.sequence_number
+                action.device_sequence_number
             )
 
             if isinstance(action.action, PlacementAction):
                 self.placements.append(action.action.placement)
             elif isinstance(action.action, UndoAction):
                 self.placements = [
-                    p for p in self.placements if p.id != action.action.id
+                    p for p in self.placements if p.id != action.action.placement_id
                 ]
             elif isinstance(action.action, ClearAction):
                 self.placements = []
