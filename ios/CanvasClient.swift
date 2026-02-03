@@ -52,8 +52,7 @@ class CanvasClient {
             }
         }
     }
-    
-    
+
     private func handleMessage(_ message: URLSessionWebSocketTask.Message) {
         switch message {
         case .string(let s):

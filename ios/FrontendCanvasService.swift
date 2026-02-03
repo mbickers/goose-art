@@ -4,6 +4,16 @@ import SwiftUI
     let userId: String
     private var deviceSequenceNumber: Int
 
+    private var unsyncedActions: [SequencedAction] = []
+    private var syncedPlacements: [Placement] = []
+
+    init() {
+        self.syncedPlacements = []
+        self.unsyncedActions = []
+        self.userId = "max"
+        self.deviceSequenceNumber = 0
+    }
+
     var placements: [Placement] {
         var placements = syncedPlacements
         for sequencedAction in unsyncedActions {
@@ -22,16 +32,6 @@ import SwiftUI
     }
     var undoablePlacementId: String? {
         placements.last(where: { placement in placement.userId == userId })?.id
-    }
-
-    private var unsyncedActions: [SequencedAction] = []
-    private var syncedPlacements: [Placement] = []
-
-    init() {
-        self.syncedPlacements = []
-        self.unsyncedActions = []
-        self.userId = "max"
-        self.deviceSequenceNumber = 0
     }
 
     func place(_ placement: Placement) {
@@ -63,10 +63,14 @@ import SwiftUI
         placements: [Placement]
     ) {
         unsyncedActions.removeAll { sequencedAction in
-            sequencedAction.deviceSequenceNumber <= greatestSeenDeviceSequenceNumber
+            sequencedAction.deviceSequenceNumber
+                <= greatestSeenDeviceSequenceNumber
         }
         // avoid server rejecting actions if client crashes after sending an update
-        deviceSequenceNumber = max(deviceSequenceNumber, greatestSeenDeviceSequenceNumber)
+        deviceSequenceNumber = max(
+            deviceSequenceNumber,
+            greatestSeenDeviceSequenceNumber
+        )
         syncedPlacements = placements
     }
 }
