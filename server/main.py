@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, Callable
+from typing import Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 from canvas_service import CanvasService
@@ -50,22 +50,16 @@ async def canvas_handler(websocket: WebSocket, user_id: str, device_id: str):
         )
         asyncio.create_task(websocket.send_json(msg))
 
-    unsubscribe: Callable[[], None] | None = None
+    unsubscribe = canvas.subscribe(canvas_subscriber, call_on_subscribe=True)
     try:
         while True:
             data = await websocket.receive_json()
             actions = deserialize_client_message(data)
             canvas.process_actions(actions, device_id=device_id)
-            if unsubscribe is None:
-                unsubscribe = canvas.subscribe(
-                    canvas_subscriber, call_on_subscribe=True
-                )
-
     except WebSocketDisconnect:
         pass
     finally:
-        if unsubscribe is not None:
-            unsubscribe()
+        unsubscribe()
 
 
 # TODO: auth
