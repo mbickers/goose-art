@@ -31,7 +31,11 @@ def deserialize_client_message(data: dict[str, Any]) -> list[SequencedAction]:
 
 # TODO: auth
 @app.websocket("/canvas")
-async def canvas_handler(websocket: WebSocket, user_id: str, device_id: str):
+async def canvas_handler(
+    websocket: WebSocket,
+    user_id: Annotated[str, Query(alias="userId")],
+    device_id: Annotated[str, Query(alias="deviceId")],
+):
     canvas = users.get(user_id)
     if not canvas:
         await websocket.close(code=4001, reason="user not assigned to a canvas")
