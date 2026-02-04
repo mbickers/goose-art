@@ -23,8 +23,8 @@ class CanvasClient {
         components.scheme = baseURL.scheme == "https" ? "wss" : "ws"
         canvasURL = components.url!.appendingPathComponent("canvas").appending(
             queryItems: [
-                URLQueryItem(name: "user_id", value: userId),
-                URLQueryItem(name: "device_id", value: deviceId),
+                URLQueryItem(name: "userId", value: userId),
+                URLQueryItem(name: "deviceId", value: deviceId),
             ])
 
         self.onServerMessage = onServerMessage
@@ -36,7 +36,7 @@ class CanvasClient {
             let socket = URLSession.shared.webSocketTask(with: canvasURL)
             socket.resume()
             self.socket = socket
-            await maybeSendQueuedPayload()
+            maybeSendQueuedPayload()
 
             do {
                 while true {
@@ -84,7 +84,7 @@ class CanvasClient {
         }
     }
 
-    func updateActionsToSend(_ actionsToSend: [SequencedAction]) async {
+    func updateActionsToSend(_ actionsToSend: [SequencedAction]) {
         if actionsToSend.count > 0 {
             self.queuedPayload = try! JSONEncoder().encode(
                 ClientMessage(actions: actionsToSend)
@@ -92,19 +92,19 @@ class CanvasClient {
         } else {
             self.queuedPayload = nil
         }
-        await maybeSendQueuedPayload()
+        maybeSendQueuedPayload()
     }
 
-    func maybeSendQueuedPayload() async {
+    func maybeSendQueuedPayload() {
         guard let queuedPayload else { return }
         guard let socket else { return }
-        do {
-            // TODO: figure out why this is data and not string
-            // TODO: don't wait for
-            try await socket.send(.data(queuedPayload))
-        } catch {
-            self.socket = nil
-            onError?("Error sending actions: \(error.localizedDescription)")
+        Task {
+            do {
+                try await socket.send(.data(queuedPayload))
+            } catch {
+                self.socket = nil
+                onError?("Error sending actions: \(error.localizedDescription)")
+            }
         }
     }
 

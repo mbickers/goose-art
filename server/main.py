@@ -1,6 +1,6 @@
 import asyncio
-from typing import Any
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from typing import Annotated, Any
+from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 
 from canvas_service import CanvasService
 from canvas_types import SequencedAction, Placement
@@ -62,9 +62,9 @@ async def canvas_handler(websocket: WebSocket, user_id: str, device_id: str):
         unsubscribe()
 
 
-# TODO: auth
+# TODO: auth/remove
 @app.get("/inspect")
-async def inspect_canvas(user_id: str):
+async def inspect_canvas(user_id: Annotated[str, Query(alias="userId")]):
     canvas = users[user_id]
     return {
         "placements": [p.to_json() for p in canvas.placements],
