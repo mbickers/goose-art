@@ -36,9 +36,10 @@ class CanvasClient {
             ])
 
         self.onError = onError
+        Task { await connect() }
     }
 
-    func connect() async {
+    private func connect() async {
         while true {
             let socket = URLSession.shared.webSocketTask(with: canvasURL)
             socket.resume()

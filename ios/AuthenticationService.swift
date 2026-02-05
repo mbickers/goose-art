@@ -16,7 +16,6 @@ class AuthenticationService {
             userId: userId,
             deviceId: UUID().uuidString
         )
-        Task { await canvasClient.connect() }
         state = .authenticated(canvasClient: canvasClient)
     }
 
