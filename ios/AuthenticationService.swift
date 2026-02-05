@@ -9,7 +9,7 @@ enum AuthenticationState: Equatable {
 class AuthenticationService {
     var state: AuthenticationState = .unauthenticated(reason: nil)
 
-    func login(userId: String) async {
+    func login(userId: String) {
         state = .authenticated(userId: userId)
     }
 

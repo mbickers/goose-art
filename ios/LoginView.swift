@@ -4,6 +4,10 @@ struct LoginView: View {
     let authenticationService: AuthenticationService
     @State private var userIdInput: String = ""
     
+    private func performLogin() {
+        authenticationService.login(userId: userIdInput)
+    }
+    
     var body: some View {
         // TODO: fix look
         VStack(spacing: 20) {
@@ -29,18 +33,15 @@ struct LoginView: View {
             VStack(spacing: 12) {
                 TextField("User ID", text: $userIdInput)
                     .textFieldStyle(.roundedBorder)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
                     .frame(maxWidth: 300)
+                    .submitLabel(.go)
+                    .onSubmit(performLogin)
                 
-                Button(action: {
-                    Task {
-                        await authenticationService.login(userId: userIdInput)
-                    }
-                }) {
-                    Text("Login")
-                        .frame(maxWidth: 300)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(userIdInput.isEmpty)
+                Button("Login", action: performLogin)
+                    .frame(maxWidth: 300)
+                    .buttonStyle(.borderedProminent)
             }
             .padding(.top)
         }
