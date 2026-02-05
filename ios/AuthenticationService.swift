@@ -15,10 +15,17 @@ class AuthenticationService {
     }
 
     func login(userId: String) {
+        let key = "deviceId"
+        let deviceId = UserDefaults.standard.string(forKey: key) ?? {
+            let newId = UUID().uuidString
+            UserDefaults.standard.set(newId, forKey: key)
+            return newId
+        }()
+
         let canvasClient = CanvasClient(
             baseURL: URL(string: "http://localhost:8000")!,
             userId: userId,
-            deviceId: "temp",
+            deviceId: deviceId
         )
         state = .authenticated(canvasClient: canvasClient)
     }
