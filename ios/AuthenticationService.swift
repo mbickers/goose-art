@@ -9,12 +9,16 @@ enum AuthenticationState {
 class AuthenticationService {
     var state: AuthenticationState = .unauthenticated(reason: nil)
 
+    // TODO: fix placeholders/remove login call in init
+    init() {
+        login(userId: "max")
+    }
+
     func login(userId: String) {
         let canvasClient = CanvasClient(
-            // TODO: make configurable
             baseURL: URL(string: "http://localhost:8000")!,
             userId: userId,
-            deviceId: UUID().uuidString
+            deviceId: "temp",
         )
         state = .authenticated(canvasClient: canvasClient)
     }
