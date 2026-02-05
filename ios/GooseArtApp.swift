@@ -7,12 +7,14 @@ struct GooseArtApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                switch authenticationService.state {
+                switch authenticationService.authenticationState {
                 case .authenticated(let userId):
-                    CanvasView()
+                    CanvasView {
+                        authenticationService.logout(reason: "User logged out")
+                    }
                     
                 case .unauthenticated(let reason):
-                    LoginView(authenticationService: authenticationService, reason: reason)
+                    UnauthenticatedView(authenticationService: authenticationService, reason: reason)
                 }
             }
         }

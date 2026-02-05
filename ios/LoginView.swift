@@ -4,9 +4,8 @@ struct LoginView: View {
     let authenticationService: AuthenticationService
     @State private var userIdInput: String = ""
     
-    let reason: String?
-    
     var body: some View {
+        // TODO: fix look
         VStack(spacing: 20) {
             Image(systemName: "person.circle.fill")
                 .font(.system(size: 80))
@@ -16,12 +15,15 @@ struct LoginView: View {
                 .font(.title)
                 .fontWeight(.bold)
             
-            if let reason = reason {
+            switch authenticationService.state {
+            case .unauthenticated(let reason?):
                 Text(reason)
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
+            default:
+                EmptyView()
             }
             
             VStack(spacing: 12) {
@@ -47,6 +49,6 @@ struct LoginView: View {
 }
 
 #Preview {
-    LoginView(authenticationService: AuthenticationService(), reason: "Session expired")
+    LoginView(authenticationService: AuthenticationService())
 }
 

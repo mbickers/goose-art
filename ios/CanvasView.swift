@@ -138,6 +138,8 @@ struct Debug: View {
 private let buttonIconColor = darkPurple.opacity(0.5)
 
 struct CanvasView: View {
+    let logout: (() -> Void)?
+    
     @State private var placementService = FrontendCanvasService()
     @State private var recentEmojisStore = RecentEmojiService()
 
@@ -147,6 +149,10 @@ struct CanvasView: View {
     @State private var activePlacementState: ActivePlacementState? = nil
     @State private var canvasFrame: CGRect? = nil
     @State private var showingSettings = false
+    
+    init(logout: (() -> Void)?) {
+        self.logout = logout
+    }
 
     private func toPlacementCoordinates(globalPoint: CGPoint) -> CGPoint? {
         guard let canvasFrame else { return nil }
@@ -422,11 +428,13 @@ struct CanvasView: View {
         .background(purple)
         .confirmationDialog("Settings", isPresented: $showingSettings) {
             Button("Clear", role: .destructive, action: placementService.clear)
-            Button("Log out", role: .destructive) {}
+            Button("Log out", role: .destructive) {
+                logout?()
+            }
         }
     }
 }
 
 #Preview {
-    CanvasView()
+    CanvasView(logout: nil)
 }
