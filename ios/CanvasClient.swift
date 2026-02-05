@@ -14,7 +14,7 @@ class CanvasClient {
     }
 
     private var socket: URLSessionWebSocketTask?
-    private var queuedPayload: Data?
+    private var queuedPayload: String?
 
     init(
         baseURL: URL,
@@ -97,9 +97,8 @@ class CanvasClient {
 
     func updateActionsToSend(_ actionsToSend: [SequencedAction]) {
         if actionsToSend.count > 0 {
-            self.queuedPayload = try! JSONEncoder().encode(
-                ClientMessage(actions: actionsToSend)
-            )
+            let data = try! JSONEncoder().encode(ClientMessage(actions: actionsToSend))
+            self.queuedPayload = String(data: data, encoding: .utf8)!
         } else {
             self.queuedPayload = nil
         }
@@ -111,7 +110,7 @@ class CanvasClient {
         guard let socket else { return }
         Task {
             do {
-                try await socket.send(.data(queuedPayload))
+                try await socket.send(.string(queuedPayload))
             } catch {
                 self.socket = nil
                 onError?("Error sending actions: \(error.localizedDescription)")
