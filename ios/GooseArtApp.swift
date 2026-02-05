@@ -12,7 +12,7 @@ struct GooseArtApp: App {
                     CanvasView()
                     
                 case .unauthenticated(let reason):
-                    UnauthenticatedView(reason: reason)
+                    LoginView(authenticationService: authenticationService, reason: reason)
                 }
             }
         }
