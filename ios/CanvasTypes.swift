@@ -37,7 +37,7 @@ extension Character {
     }
 }
 
-struct Placement: Codable {
+struct Placement: Codable, Equatable {
     let emoji: Emoji
     let position: CGPoint
     let scale: CGFloat

@@ -2,16 +2,32 @@ import SwiftUI
 
 @Observable class FrontendCanvasService {
     let userId: String
+    private let canvasClient: CanvasClient?
     private var deviceSequenceNumber: Int
 
     private var unsyncedActions: [SequencedAction] = []
     private var syncedPlacements: [Placement] = []
 
-    init() {
+    init(canvasClient: CanvasClient? = nil) {
+        self.canvasClient = canvasClient
+        self.userId = canvasClient?.userId ?? "anonymous"
         self.syncedPlacements = []
         self.unsyncedActions = []
-        self.userId = "max"
         self.deviceSequenceNumber = 0
+
+        if let message = canvasClient?.mostRecentServerMessage {
+            serverUpdate(
+                greatestSeenDeviceSequenceNumber: message.greatestSeenDeviceSequenceNumber,
+                placements: message.placements
+            )
+        }
+        canvasClient?.subscribeToServerMessages { [weak self] message in
+            self?.serverUpdate(
+                greatestSeenDeviceSequenceNumber: message.greatestSeenDeviceSequenceNumber,
+                placements: message.placements
+            )
+        }
+        canvasClient?.updateActionsToSend(unsyncedActions)
     }
 
     var placements: [Placement] {
@@ -56,6 +72,7 @@ import SwiftUI
             deviceSequenceNumber: deviceSequenceNumber
         )
         unsyncedActions.append(sequencedAction)
+        canvasClient?.updateActionsToSend(unsyncedActions)
     }
 
     func serverUpdate(

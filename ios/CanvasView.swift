@@ -139,8 +139,8 @@ private let buttonIconColor = darkPurple.opacity(0.5)
 
 struct CanvasView: View {
     let logout: (() -> Void)?
-    
-    @State private var placementService = FrontendCanvasService()
+
+    @State private var placementService: FrontendCanvasService
     @State private var recentEmojisStore = RecentEmojiService()
 
     @State private var emojiFieldValue: String = ""
@@ -149,9 +149,10 @@ struct CanvasView: View {
     @State private var activePlacementState: ActivePlacementState? = nil
     @State private var canvasFrame: CGRect? = nil
     @State private var showingSettings = false
-    
-    init(logout: (() -> Void)?) {
+
+    init(canvasClient: CanvasClient? = nil, logout: (() -> Void)?) {
         self.logout = logout
+        self._placementService = State(initialValue: FrontendCanvasService(canvasClient: canvasClient))
     }
 
     private func toPlacementCoordinates(globalPoint: CGPoint) -> CGPoint? {

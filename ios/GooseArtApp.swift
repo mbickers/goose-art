@@ -8,8 +8,8 @@ struct GooseArtApp: App {
         WindowGroup {
             Group {
                 switch authenticationService.state {
-                case .authenticated(_):
-                    CanvasView(logout: {
+                case .authenticated(let canvasClient):
+                    CanvasView(canvasClient: canvasClient, logout: {
                         authenticationService.logout()
                     })
 

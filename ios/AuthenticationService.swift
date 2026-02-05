@@ -1,7 +1,7 @@
 import SwiftUI
 
-enum AuthenticationState: Equatable {
-    case authenticated(userId: String)
+enum AuthenticationState {
+    case authenticated(canvasClient: CanvasClient)
     case unauthenticated(reason: String?)
 }
 
@@ -10,7 +10,14 @@ class AuthenticationService {
     var state: AuthenticationState = .unauthenticated(reason: nil)
 
     func login(userId: String) {
-        state = .authenticated(userId: userId)
+        let canvasClient = CanvasClient(
+            // TODO: make configurable
+            baseURL: URL(string: "http://localhost:8000")!,
+            userId: userId,
+            deviceId: UUID().uuidString
+        )
+        Task { await canvasClient.connect() }
+        state = .authenticated(canvasClient: canvasClient)
     }
 
     func logout() {

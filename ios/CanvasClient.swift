@@ -1,10 +1,17 @@
 import Foundation
 
 class CanvasClient {
+    let userId: String
     private let canvasURL: URL
     private let reconnectDelay: TimeInterval = 1.0
-    private let onServerMessage: (ServerMessage) -> Void
     private let onError: ((String) -> Void)?
+
+    private var serverMessageSubscribers: [(ServerMessage) -> Void] = []
+    private(set) var mostRecentServerMessage: ServerMessage?
+
+    func subscribeToServerMessages(_ callback: @escaping (ServerMessage) -> Void) {
+        serverMessageSubscribers.append(callback)
+    }
 
     private var socket: URLSessionWebSocketTask?
     private var queuedPayload: Data?
@@ -13,9 +20,10 @@ class CanvasClient {
         baseURL: URL,
         userId: String,
         deviceId: String,
-        onServerMessage: @escaping (ServerMessage) -> Void,
         onError: ((String) -> Void)? = nil
     ) {
+        self.userId = userId
+
         var components = URLComponents(
             url: baseURL,
             resolvingAgainstBaseURL: false
@@ -27,7 +35,6 @@ class CanvasClient {
                 URLQueryItem(name: "deviceId", value: deviceId),
             ])
 
-        self.onServerMessage = onServerMessage
         self.onError = onError
     }
 
@@ -67,7 +74,10 @@ class CanvasClient {
                     ServerMessage.self,
                     from: data
                 )
-                onServerMessage(serverMessage)
+                mostRecentServerMessage = serverMessage
+                for subscriber in serverMessageSubscribers {
+                    subscriber(serverMessage)
+                }
             } catch {
                 onError?(
                     "Error decoding server message: \(error.localizedDescription)"
@@ -114,7 +124,7 @@ struct ClientMessage: Codable {
     let actions: [SequencedAction]
 }
 
-struct ServerMessage: Codable {
+struct ServerMessage: Codable, Equatable {
     let greatestSeenDeviceSequenceNumber: Int
     let placements: [Placement]
 }
