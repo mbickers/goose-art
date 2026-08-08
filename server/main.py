@@ -2,10 +2,11 @@ import asyncio
 import json
 from typing import Annotated, Any
 
-from canvas_service import CanvasService
-from canvas_types import Placement, SequencedAction
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
+
+from canvas_service import CanvasService
+from canvas_types import Placement, SequencedAction
 
 app = FastAPI()
 

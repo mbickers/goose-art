@@ -1,10 +1,10 @@
 from typing import Protocol
 
 from canvas_types import (
-    SequencedAction,
     ClearAction,
     Placement,
     PlacementAction,
+    SequencedAction,
     UndoAction,
 )
 
