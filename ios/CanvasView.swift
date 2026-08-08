@@ -375,6 +375,10 @@ struct CanvasView: View {
         if let canvasFrame = canvasFrame {
             Text(placement.emoji.stringValue)
                 .font(.system(size: canvasFrame.height * placement.scale))
+                // the canvas proposes less width than the full-screen drag preview,
+                // so without this a large glyph gets a narrower frame in one than
+                // the other and .position centers them differently
+                .fixedSize()
                 .scaleEffect(x: placement.isMirrored ? -1 : 1, y: 1)
                 .rotationEffect(Angle(radians: placement.rotation))
         } else {
