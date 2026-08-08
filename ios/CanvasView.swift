@@ -9,25 +9,38 @@ struct SecondTouchState {
 }
 
 struct ActivePlacementState {
+    enum Source {
+        case palette
+        case canvas
+    }
+
     let placement: Placement
     let secondTouchState: SecondTouchState?
+    let source: Source
 
-    init(placement: Placement, secondTouchState: SecondTouchState?) {
+    init(
+        placement: Placement,
+        secondTouchState: SecondTouchState?,
+        source: Source
+    ) {
         self.placement = placement
         self.secondTouchState = secondTouchState
+        self.source = source
     }
 
     func with(placement: Placement) -> ActivePlacementState {
         return ActivePlacementState(
             placement: placement,
-            secondTouchState: secondTouchState
+            secondTouchState: secondTouchState,
+            source: source
         )
     }
 
     func with(secondTouchState: SecondTouchState?) -> ActivePlacementState {
         return ActivePlacementState(
             placement: placement,
-            secondTouchState: secondTouchState
+            secondTouchState: secondTouchState,
+            source: source
         )
     }
 }
@@ -138,9 +151,9 @@ struct Debug: View {
 private let buttonIconColor = darkPurple.opacity(0.5)
 
 struct CanvasView: View {
+    let placementService: FrontendCanvasService
     let logout: (() -> Void)?
 
-    @State private var placementService: FrontendCanvasService
     @State private var recentEmojisStore = RecentEmojiService()
 
     @State private var emojiFieldValue: String = ""
@@ -150,12 +163,6 @@ struct CanvasView: View {
     @State private var canvasFrame: CGRect? = nil
     @State private var showingSettings = false
 
-    init(canvasClient: CanvasClient? = nil, logout: (() -> Void)?) {
-        self.logout = logout
-        self._placementService = State(
-            initialValue: FrontendCanvasService(canvasClient: canvasClient))
-    }
-
     private func toPlacementCoordinates(globalPoint: CGPoint) -> CGPoint? {
         guard let canvasFrame else { return nil }
         return (globalPoint - canvasFrame.origin).safeDivide(
@@ -163,7 +170,10 @@ struct CanvasView: View {
         )
     }
 
-    private func makeDragGesture(emoji: Emoji) -> some Gesture {
+    private func makeDragGesture(
+        source: ActivePlacementState.Source,
+        makePlacement: @escaping (CGPoint) -> Placement
+    ) -> some Gesture {
         let dragGesture = DragGesture(
             minimumDistance: 10,
             coordinateSpace: .global
@@ -178,16 +188,9 @@ struct CanvasView: View {
             let activePlacementState =
                 activePlacementState
                 ?? ActivePlacementState(
-                    placement: Placement(
-                        emoji: emoji,
-                        position: placementPosition,
-                        scale: 0.3,
-                        rotation: 0,
-                        isMirrored: false,
-                        userId: placementService.userId,
-                        id: UUID().uuidString,
-                    ),
-                    secondTouchState: nil
+                    placement: makePlacement(placementPosition),
+                    secondTouchState: nil,
+                    source: source
                 )
             self.activePlacementState = activePlacementState.with(
                 placement:
@@ -195,22 +198,48 @@ struct CanvasView: View {
                         position: placementPosition
                     )
             )
-        }.onEnded { value in
-            guard let activePlacementState else { return }
-
-            if activePlacementState.placement.hasValidPosition {
-                placementService.place(activePlacementState.placement)
-                recentEmojisStore.emojiUsed(
-                    activePlacementState.placement.emoji
-                )
-            }
-
-            self.activePlacementState = nil
+        }.onEnded { _ in
+            dropActivePlacement()
         }
 
         return LongPressGesture(minimumDuration: 0.2).sequenced(
             before: dragGesture
         )
+    }
+
+    private func makePaletteDragGesture(emoji: Emoji) -> some Gesture {
+        return makeDragGesture(source: .palette) { placementPosition in
+            Placement(
+                emoji: emoji,
+                position: placementPosition,
+                scale: 0.3,
+                rotation: 0,
+                isMirrored: false,
+                id: UUID().uuidString,
+            )
+        }
+    }
+
+    // reuses the placement's id so that dropping it upserts rather than duplicates
+    private func makePickupGesture(placement: Placement) -> some Gesture {
+        return makeDragGesture(source: .canvas) { _ in placement }
+    }
+
+    private func dropActivePlacement() {
+        guard let state = activePlacementState else { return }
+        activePlacementState = nil
+
+        switch (state.source, state.placement.hasValidPosition) {
+        case (.palette, true):
+            placementService.upsertPlacement(state.placement)
+            recentEmojisStore.emojiUsed(state.placement.emoji)
+        case (.canvas, true):
+            placementService.upsertPlacement(state.placement)
+        case (.canvas, false):
+            placementService.remove(placementId: state.placement.id)
+        case (.palette, false):
+            break
+        }
     }
 
     private var secondTouchGesture: some Gesture {
@@ -329,22 +358,22 @@ struct CanvasView: View {
                 Color.clear
                     .contentShape(Rectangle())
                     .gesture(
-                        makeDragGesture(emoji: emoji)
+                        makePaletteDragGesture(emoji: emoji)
                     )
             }
         }
     }
 
-    @ViewBuilder private func placementView(
-        _ placement: Placement,
-        offset: CGPoint = .zero
-    ) -> some View {
+    // positioning is left to the caller so that gestures can be attached before
+    // .position, which otherwise expands to fill the whole canvas
+    @ViewBuilder private func placementGlyph(_ placement: Placement)
+        -> some View
+    {
         if let canvasFrame = canvasFrame {
             Text(placement.emoji.stringValue)
                 .font(.system(size: canvasFrame.height * placement.scale))
                 .scaleEffect(x: placement.isMirrored ? -1 : 1, y: 1)
                 .rotationEffect(Angle(radians: placement.rotation))
-                .position(placement.position * canvasFrame.height + offset)
         } else {
             EmptyView()
         }
@@ -357,12 +386,27 @@ struct CanvasView: View {
                     Rectangle()
                         .fill(blue)
 
-                    ForEach(
-                        placementService.placements.enumerated(),
-                        id: \.offset
-                    ) {
-                        (_, placement) in
-                        placementView(placement)
+                    if let canvasFrame {
+                        ForEach(
+                            placementService.placements.filter { placement in
+                                placement.id
+                                    != activePlacementState?.placement.id
+                            },
+                            id: \.id
+                        ) {
+                            placement in
+                            placementGlyph(placement)
+                                .contentShape(Rectangle())
+                                .gesture(
+                                    makePickupGesture(placement: placement)
+                                )
+                                // a second finger has to reach secondTouchGesture
+                                // on the canvas rather than pick up another emoji
+                                .allowsHitTesting(activePlacementState == nil)
+                                .position(
+                                    placement.position * canvasFrame.height
+                                )
+                        }
                     }
                 }
                 .modifier(GeometryTracker(binding: $canvasFrame))
@@ -375,12 +419,6 @@ struct CanvasView: View {
                 )
 
                 HStack(spacing: 10) {
-                    ActionButton(
-                        iconName: "arrow.uturn.backward",
-                        enabled: placementService.undoablePlacementId != nil,
-                        action: placementService.undo,
-                    )
-
                     ActionButton(
                         iconName:
                             "arrow.left.and.right.righttriangle.left.righttriangle.right",
@@ -409,7 +447,7 @@ struct CanvasView: View {
                             emoji in
                             Text(emoji.stringValue)
                                 .gesture(
-                                    makeDragGesture(emoji: emoji)
+                                    makePaletteDragGesture(emoji: emoji)
                                 )
                                 .modifier(EmojiButton(color: pink))
                         }
@@ -419,7 +457,11 @@ struct CanvasView: View {
             }.padding()
 
             if let dragState = activePlacementState, let canvasFrame {
-                placementView(dragState.placement, offset: canvasFrame.origin)
+                placementGlyph(dragState.placement)
+                    .position(
+                        dragState.placement.position * canvasFrame.height
+                            + canvasFrame.origin
+                    )
                     .opacity(dragState.placement.hasValidPosition ? 0.8 : 0.5)
                     // ignores safe area so that status bar and dynamic island to impact placement
                     .ignoresSafeArea()
@@ -438,5 +480,5 @@ struct CanvasView: View {
 }
 
 #Preview {
-    CanvasView(logout: nil)
+    CanvasView(placementService: FrontendCanvasService(), logout: nil)
 }

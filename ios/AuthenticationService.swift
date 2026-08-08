@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum AuthenticationState {
-    case authenticated(canvasClient: CanvasClient)
+    case authenticated(canvasService: FrontendCanvasService)
     case unauthenticated(reason: String?)
 }
 
@@ -29,7 +29,9 @@ class AuthenticationService {
             userId: userId,
             deviceId: deviceId
         )
-        state = .authenticated(canvasClient: canvasClient)
+        state = .authenticated(
+            canvasService: FrontendCanvasService(canvasClient: canvasClient)
+        )
     }
 
     func logout() {
