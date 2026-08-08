@@ -152,7 +152,8 @@ struct CanvasView: View {
 
     init(canvasClient: CanvasClient? = nil, logout: (() -> Void)?) {
         self.logout = logout
-        self._placementService = State(initialValue: FrontendCanvasService(canvasClient: canvasClient))
+        self._placementService = State(
+            initialValue: FrontendCanvasService(canvasClient: canvasClient))
     }
 
     private func toPlacementCoordinates(globalPoint: CGPoint) -> CGPoint? {

@@ -9,9 +9,11 @@ struct GooseArtApp: App {
             Group {
                 switch authenticationService.state {
                 case .authenticated(let canvasClient):
-                    CanvasView(canvasClient: canvasClient, logout: {
-                        authenticationService.logout()
-                    })
+                    CanvasView(
+                        canvasClient: canvasClient,
+                        logout: {
+                            authenticationService.logout()
+                        })
 
                 case .unauthenticated(_):
                     LoginView(authenticationService: authenticationService)

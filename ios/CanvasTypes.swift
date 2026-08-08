@@ -79,7 +79,10 @@ struct Placement: Codable, Equatable {
         case id
     }
 
-    init(emoji: Emoji, position: CGPoint, scale: CGFloat, rotation: CGFloat, isMirrored: Bool, userId: String, id: String) {
+    init(
+        emoji: Emoji, position: CGPoint, scale: CGFloat, rotation: CGFloat, isMirrored: Bool,
+        userId: String, id: String
+    ) {
         self.emoji = emoji
         self.position = position
         self.scale = scale
@@ -199,4 +202,3 @@ struct SequencedAction: Codable {
         try container.encode(deviceSequenceNumber, forKey: .deviceSequenceNumber)
     }
 }
-
