@@ -75,14 +75,27 @@ struct RoundedBorder: ViewModifier {
 
 let buttonBorder = RoundedBorder(cornerRadius: 20, lineWidth: 6)
 
+struct ButtonSurface: ViewModifier {
+    let color: Color
+    let dimmed: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .background(color)
+            .opacity(dimmed ? 0.5 : 1)
+            .modifier(buttonBorder)
+    }
+}
+
 struct EmojiButton: ViewModifier {
     let color: Color
+    let dimmed: Bool
+
     func body(content: Content) -> some View {
         content
             .font(.system(size: 40))
             .frame(width: 60, height: 60)
-            .background(color)
-            .modifier(buttonBorder)
+            .modifier(ButtonSurface(color: color, dimmed: dimmed))
     }
 }
 
@@ -104,9 +117,7 @@ struct ActionButton: View {
                 .foregroundColor(buttonIconColor)
                 .frame(maxWidth: .infinity)
                 .frame(height: 40)
-                .background(yellow)
-                .opacity(enabled ? 1.0 : 0.5)
-                .modifier(buttonBorder)
+                .modifier(ButtonSurface(color: yellow, dimmed: !enabled))
         }
         .disabled(!enabled)
     }
@@ -444,15 +455,22 @@ struct CanvasView: View {
                         }
                     }
 
-                    ActionButton(iconName: "gearshape") {
+                    ActionButton(
+                        iconName: "gearshape",
+                        enabled: activePlacementState == nil
+                    ) {
                         showingSettings = true
                     }
                 }
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack {
+                        // dimmed rather than disabled: the drag being dimmed for
+                        // starts here, and disabling would cancel it mid-gesture
+                        let dimmed = activePlacementState != nil
+
                         emojiTextField
-                            .modifier(EmojiButton(color: yellow))
+                            .modifier(EmojiButton(color: yellow, dimmed: dimmed))
 
                         ForEach(recentEmojisStore.recentEmojis, id: \.self) {
                             emoji in
@@ -460,7 +478,7 @@ struct CanvasView: View {
                                 .gesture(
                                     makePaletteDragGesture(emoji: emoji)
                                 )
-                                .modifier(EmojiButton(color: pink))
+                                .modifier(EmojiButton(color: pink, dimmed: dimmed))
                         }
                     }
                 }
