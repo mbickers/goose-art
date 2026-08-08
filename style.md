@@ -1,0 +1,98 @@
+# Style
+
+## Use explicit, required keyword arguments whenever the meaning of an argument is not obvious
+
+A call site should be readable without opening the function being called. If a
+reader can't tell what a value *means* from the call alone, it needs a label.
+
+Make keyword arguments **mandatory by default** in both languages, and only drop
+the label when the argument's meaning is unmistakable from the function name and
+the value itself.
+
+The rule earns its keep when a function takes **several** arguments — that's
+where a bare value is genuinely ambiguous and where a reader has to count
+positions. With a single argument there's nothing to confuse it with, so a label
+is optional; add one only if the value's role still isn't clear from the call.
+
+### Swift
+
+Label every argument, with one exception: **don't repeat a word in both the base
+name and the first argument's label.** Swift reads the function name and its
+first argument as a single phrase, so a label that restates the name stutters at
+the call site.
+
+```swift
+// bad — stutters: upsertPlacement(placement:), placementGlyph(placement:)
+func upsertPlacement(placement: Placement)
+func placementGlyph(placement: Placement) -> some View
+
+// good — the noun lives in the base name, so the first label is dropped
+func upsertPlacement(_ placement: Placement)
+func placementGlyph(_ placement: Placement) -> some View
+
+// also good — the noun lives in the label instead
+func upsert(placement: Placement)
+```
+
+`_` is only for that first, already-named argument. Every later argument keeps
+its label, and any argument whose meaning isn't carried by the function name
+keeps its label regardless of position:
+
+```swift
+func makeDragGesture(
+    source: ActivePlacementState.Source,
+    makePlacement: @escaping (CGPoint) -> Placement
+) -> some Gesture
+```
+
+Give enum cases with associated values labels too, so `switch` bindings and
+construction both read as prose:
+
+```swift
+case upsert(placement: Placement)   // not: case upsert(Placement)
+case remove(placementId: String)
+```
+
+`_` is still right when the label would only stutter — `Emoji(_ character:
+Character)`, or operators.
+
+### Python
+
+Use `*` in signatures, and `@dataclass(kw_only=True)` for data types, so callers
+must name their arguments:
+
+```python
+def process_actions(self, actions: list[SequencedAction], *, device_id: str): ...
+def subscribe(self, subscriber: PlacementsSubscriber, *, call_on_subscribe: bool): ...
+
+@dataclass(kw_only=True)
+class Placement: ...
+```
+
+A single argument the function name already describes may stay positional:
+`Placement.from_json(data)`.
+
+## Avoid ViewBuilder-style trailing closures for our own functions
+
+Trailing-closure syntax hides the parameter label, which is exactly the
+information a reader needs when the closure's role isn't self-evident. Pass the
+closure as a normal labeled argument:
+
+```swift
+// bad — nothing at the call site says what this closure is for
+makeDragGesture(source: .palette) { placementPosition in
+    Placement(emoji: emoji, position: placementPosition, ...)
+}
+
+// good
+makeDragGesture(
+    source: .palette,
+    makePlacement: { placementPosition in
+        Placement(emoji: emoji, position: placementPosition, ...)
+    }
+)
+```
+
+Trailing closures are fine where the role genuinely is obvious: SwiftUI
+container builders (`VStack { }`, `ZStack { }`, `ForEach(...) { }`), and a
+button's action (`ActionButton(iconName: "gearshape") { ... }`).

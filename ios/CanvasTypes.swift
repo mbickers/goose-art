@@ -43,7 +43,6 @@ struct Placement: Codable, Equatable {
     let scale: CGFloat
     let rotation: CGFloat
     let isMirrored: Bool
-    let userId: String
     let id: String
 
     var hasValidPosition: Bool {
@@ -55,7 +54,6 @@ struct Placement: Codable, Equatable {
         scale: CGFloat? = nil,
         rotation: CGFloat? = nil,
         isMirrored: Bool? = nil,
-        userId: String? = nil,
         id: String? = nil,
     ) -> Placement {
         return Placement(
@@ -64,7 +62,6 @@ struct Placement: Codable, Equatable {
             scale: scale ?? self.scale,
             rotation: rotation ?? self.rotation,
             isMirrored: isMirrored ?? self.isMirrored,
-            userId: userId ?? self.userId,
             id: id ?? self.id
         )
     }
@@ -75,20 +72,18 @@ struct Placement: Codable, Equatable {
         case scale
         case rotation
         case isMirrored
-        case userId
         case id
     }
 
     init(
         emoji: Emoji, position: CGPoint, scale: CGFloat, rotation: CGFloat, isMirrored: Bool,
-        userId: String, id: String
+        id: String
     ) {
         self.emoji = emoji
         self.position = position
         self.scale = scale
         self.rotation = rotation
         self.isMirrored = isMirrored
-        self.userId = userId
         self.id = id
     }
 
@@ -110,7 +105,6 @@ struct Placement: Codable, Equatable {
         self.scale = try container.decode(CGFloat.self, forKey: .scale)
         self.rotation = try container.decode(CGFloat.self, forKey: .rotation)
         self.isMirrored = try container.decode(Bool.self, forKey: .isMirrored)
-        self.userId = try container.decode(String.self, forKey: .userId)
         self.id = try container.decode(String.self, forKey: .id)
     }
 
@@ -122,15 +116,14 @@ struct Placement: Codable, Equatable {
         try container.encode(scale, forKey: .scale)
         try container.encode(rotation, forKey: .rotation)
         try container.encode(isMirrored, forKey: .isMirrored)
-        try container.encode(userId, forKey: .userId)
         try container.encode(id, forKey: .id)
     }
 }
 
 enum Action {
     case clear
-    case undo(placementId: String)
-    case place(Placement)
+    case remove(placementId: String)
+    case upsert(placement: Placement)
 }
 
 struct SequencedAction: Codable {
@@ -162,12 +155,12 @@ struct SequencedAction: Codable {
 
         let type = try actionContainer.decode(String.self, forKey: .type)
         switch type {
-        case "place":
+        case "upsert":
             let placement = try actionContainer.decode(Placement.self, forKey: .placement)
-            self.action = .place(placement)
-        case "undo":
+            self.action = .upsert(placement: placement)
+        case "remove":
             let placementId = try actionContainer.decode(String.self, forKey: .placementId)
-            self.action = .undo(placementId: placementId)
+            self.action = .remove(placementId: placementId)
         case "clear":
             self.action = .clear
         default:
@@ -189,11 +182,11 @@ struct SequencedAction: Codable {
         )
 
         switch action {
-        case .place(let placement):
-            try actionContainer.encode("place", forKey: .type)
+        case .upsert(let placement):
+            try actionContainer.encode("upsert", forKey: .type)
             try actionContainer.encode(placement, forKey: .placement)
-        case .undo(let placementId):
-            try actionContainer.encode("undo", forKey: .type)
+        case .remove(let placementId):
+            try actionContainer.encode("remove", forKey: .type)
             try actionContainer.encode(placementId, forKey: .placementId)
         case .clear:
             try actionContainer.encode("clear", forKey: .type)

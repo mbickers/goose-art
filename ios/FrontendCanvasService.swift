@@ -1,7 +1,6 @@
 import SwiftUI
 
 @Observable class FrontendCanvasService {
-    let userId: String
     private let canvasClient: CanvasClient?
     private var deviceSequenceNumber: Int
 
@@ -10,7 +9,6 @@ import SwiftUI
 
     init(canvasClient: CanvasClient? = nil) {
         self.canvasClient = canvasClient
-        self.userId = canvasClient?.userId ?? "anonymous"
         self.syncedPlacements = []
         self.unsyncedActions = []
         self.deviceSequenceNumber = 0
@@ -36,29 +34,26 @@ import SwiftUI
             switch sequencedAction.action {
             case .clear:
                 placements = []
-            case .undo(let id):
+            case .remove(let id):
                 placements = placements.filter { placement in
                     placement.id != id
                 }
-            case .place(let newPlacement):
+            case .upsert(let newPlacement):
+                placements = placements.filter { placement in
+                    placement.id != newPlacement.id
+                }
                 placements.append(newPlacement)
             }
         }
         return placements
     }
-    var undoablePlacementId: String? {
-        placements.last(where: { placement in placement.userId == userId })?.id
+
+    func upsertPlacement(_ placement: Placement) {
+        action(.upsert(placement: placement))
     }
 
-    func place(_ placement: Placement) {
-        action(
-            .place(placement.with(userId: userId, id: UUID().uuidString))
-        )
-    }
-
-    func undo() {
-        guard let undoablePlacementId else { return }
-        action(.undo(placementId: undoablePlacementId))
+    func remove(placementId: String) {
+        action(.remove(placementId: placementId))
     }
 
     func clear() {

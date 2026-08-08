@@ -3,9 +3,9 @@ from typing import Protocol
 from canvas_types import (
     ClearAction,
     Placement,
-    PlacementAction,
+    RemoveAction,
     SequencedAction,
-    UndoAction,
+    UpsertAction,
 )
 
 
@@ -42,9 +42,13 @@ class CanvasService:
                 action.device_sequence_number
             )
 
-            if isinstance(action.action, PlacementAction):
-                self.placements.append(action.action.placement)
-            elif isinstance(action.action, UndoAction):
+            if isinstance(action.action, UpsertAction):
+                placement = action.action.placement
+                # an upserted placement moves to the top of the z-order
+                self.placements = [
+                    p for p in self.placements if p.id != placement.id
+                ] + [placement]
+            elif isinstance(action.action, RemoveAction):
                 self.placements = [
                     p for p in self.placements if p.id != action.action.placement_id
                 ]

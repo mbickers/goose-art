@@ -20,7 +20,6 @@ class Placement:
     scale: float
     rotation: float
     is_mirrored: bool
-    user_id: str
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -30,7 +29,6 @@ class Placement:
             "scale": self.scale,
             "rotation": self.rotation,
             "isMirrored": self.is_mirrored,
-            "userId": self.user_id,
         }
 
     @classmethod
@@ -42,17 +40,16 @@ class Placement:
             scale=data["scale"],
             rotation=data["rotation"],
             is_mirrored=data["isMirrored"],
-            user_id=data["userId"],
         )
 
 
 @dataclass(kw_only=True)
-class PlacementAction:
+class UpsertAction:
     placement: Placement
 
 
 @dataclass(kw_only=True)
-class UndoAction:
+class RemoveAction:
     placement_id: str
 
 
@@ -61,12 +58,12 @@ class ClearAction:
     pass
 
 
-Action = PlacementAction | UndoAction | ClearAction
+Action = UpsertAction | RemoveAction | ClearAction
 
 
 @dataclass(kw_only=True)
 class SequencedAction:
-    action: PlacementAction | UndoAction | ClearAction
+    action: UpsertAction | RemoveAction | ClearAction
     device_sequence_number: int
 
     @classmethod
@@ -74,10 +71,10 @@ class SequencedAction:
         inner = data["action"]
         action_type = inner["type"]
 
-        if action_type == "place":
-            action = PlacementAction(placement=Placement.from_json(inner["placement"]))
-        elif action_type == "undo":
-            action = UndoAction(placement_id=inner["placementId"])
+        if action_type == "upsert":
+            action = UpsertAction(placement=Placement.from_json(inner["placement"]))
+        elif action_type == "remove":
+            action = RemoveAction(placement_id=inner["placementId"])
         elif action_type == "clear":
             action = ClearAction()
         else:

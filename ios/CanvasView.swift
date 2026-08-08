@@ -208,21 +208,24 @@ struct CanvasView: View {
     }
 
     private func makePaletteDragGesture(emoji: Emoji) -> some Gesture {
-        return makeDragGesture(source: .palette) { placementPosition in
-            Placement(
-                emoji: emoji,
-                position: placementPosition,
-                scale: 0.3,
-                rotation: 0,
-                isMirrored: false,
-                id: UUID().uuidString,
-            )
-        }
+        return makeDragGesture(
+            source: .palette,
+            makePlacement: { placementPosition in
+                Placement(
+                    emoji: emoji,
+                    position: placementPosition,
+                    scale: 0.3,
+                    rotation: 0,
+                    isMirrored: false,
+                    id: UUID().uuidString,
+                )
+            }
+        )
     }
 
     // reuses the placement's id so that dropping it upserts rather than duplicates
     private func makePickupGesture(placement: Placement) -> some Gesture {
-        return makeDragGesture(source: .canvas) { _ in placement }
+        return makeDragGesture(source: .canvas, makePlacement: { _ in placement })
     }
 
     private func dropActivePlacement() {
@@ -388,35 +391,39 @@ struct CanvasView: View {
 
                     if let canvasFrame {
                         ForEach(
-                            placementService.placements.filter { placement in
-                                placement.id
-                                    != activePlacementState?.placement.id
-                            },
+                            placementService.placements,
                             id: \.id
                         ) {
                             placement in
+                            let placementIsBeingDragged =
+                                activePlacementState?.placement.id == placement.id
                             placementGlyph(placement)
                                 .contentShape(Rectangle())
                                 .gesture(
                                     makePickupGesture(placement: placement)
                                 )
-                                // a second finger has to reach secondTouchGesture
-                                // on the canvas rather than pick up another emoji
-                                .allowsHitTesting(activePlacementState == nil)
+                                .opacity(placementIsBeingDragged ? 0.1 : 1)
                                 .position(
                                     placement.position * canvasFrame.height
                                 )
                         }
+                    }
+
+                    // Sibling of the glyphs rather than a modifier on this ZStack:
+                    // a gesture on an ancestor of the glyph holding the active drag
+                    // competes with it for the same touch instead of taking the
+                    // second finger, and the drag then never ends. Layering it on
+                    // top also stops a second finger from picking up another emoji.
+                    if activePlacementState != nil {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .gesture(secondTouchGesture)
                     }
                 }
                 .modifier(GeometryTracker(binding: $canvasFrame))
                 .modifier(RoundedBorder(cornerRadius: 20, lineWidth: 6))
                 .frame(maxWidth: .infinity)
                 .aspectRatio(1, contentMode: .fit)
-                .gesture(
-                    secondTouchGesture,
-                    isEnabled: activePlacementState != nil
-                )
 
                 HStack(spacing: 10) {
                     ActionButton(
