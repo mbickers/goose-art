@@ -99,6 +99,9 @@ struct LocalState: Codable {
         canvasClient?.updateActionsToSend(unsyncedActions)
     }
 
+    // the server holds canvas state in memory, so a restart pushes empty placements and
+    // a sequence number back at 0. that is a normal update, not an error: emptying the
+    // canvas is fine, crashing or wedging the connection over it is not
     func serverUpdate(
         greatestSeenDeviceSequenceNumber: Int,
         placements: [Placement]
