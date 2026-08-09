@@ -50,5 +50,5 @@ struct LoginView: View {
 }
 
 #Preview {
-    LoginView(authenticationService: AuthenticationService())
+    LoginView(authenticationService: AuthenticationService(baseURL: nil))
 }

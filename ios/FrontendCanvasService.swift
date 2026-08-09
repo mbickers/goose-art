@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct LocalState {
+struct LocalState: Codable {
     let deviceSequenceNumber: Int
     let placements: [Placement]
     let unsyncedActions: [SequencedAction]
