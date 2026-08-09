@@ -1,17 +1,31 @@
 import SwiftUI
 
+struct LocalState {
+    let deviceSequenceNumber: Int
+    let placements: [Placement]
+    let unsyncedActions: [SequencedAction]
+}
+
 @Observable class FrontendCanvasService {
     private let canvasClient: CanvasClient?
-    private var deviceSequenceNumber: Int
+    private let persistState: ((LocalState) -> Void)?
 
-    private var unsyncedActions: [SequencedAction] = []
-    private var syncedPlacements: [Placement] = []
+    private var localState: LocalState
 
-    init(canvasClient: CanvasClient? = nil) {
+    init(
+        canvasClient: CanvasClient? = nil,
+        initialState: LocalState? = nil,
+        persistState: ((LocalState) -> Void)? = nil
+    ) {
         self.canvasClient = canvasClient
-        self.syncedPlacements = []
-        self.unsyncedActions = []
-        self.deviceSequenceNumber = 0
+        self.persistState = persistState
+        self.localState =
+            initialState
+            ?? LocalState(
+                deviceSequenceNumber: 0,
+                placements: [],
+                unsyncedActions: []
+            )
 
         if let message = canvasClient?.mostRecentServerMessage {
             serverUpdate(
@@ -25,12 +39,17 @@ import SwiftUI
                 placements: message.placements
             )
         }
-        canvasClient?.updateActionsToSend(unsyncedActions)
+        canvasClient?.updateActionsToSend(localState.unsyncedActions)
+    }
+
+    private func update(localState: LocalState) {
+        self.localState = localState
+        persistState?(localState)
     }
 
     var placements: [Placement] {
-        var placements = syncedPlacements
-        for sequencedAction in unsyncedActions {
+        var placements = localState.placements
+        for sequencedAction in localState.unsyncedActions {
             switch sequencedAction.action {
             case .clear:
                 placements = []
@@ -61,12 +80,22 @@ import SwiftUI
     }
 
     private func action(_ action: Action) {
-        deviceSequenceNumber += 1
-        let sequencedAction = SequencedAction(
-            action: action,
-            deviceSequenceNumber: deviceSequenceNumber
+        let deviceSequenceNumber = localState.deviceSequenceNumber + 1
+        let unsyncedActions =
+            localState.unsyncedActions
+            + [
+                SequencedAction(
+                    action: action,
+                    deviceSequenceNumber: deviceSequenceNumber
+                )
+            ]
+        update(
+            localState: LocalState(
+                deviceSequenceNumber: deviceSequenceNumber,
+                placements: localState.placements,
+                unsyncedActions: unsyncedActions
+            )
         )
-        unsyncedActions.append(sequencedAction)
         canvasClient?.updateActionsToSend(unsyncedActions)
     }
 
@@ -74,15 +103,20 @@ import SwiftUI
         greatestSeenDeviceSequenceNumber: Int,
         placements: [Placement]
     ) {
-        unsyncedActions.removeAll { sequencedAction in
-            sequencedAction.deviceSequenceNumber
-                <= greatestSeenDeviceSequenceNumber
-        }
-        // avoid server rejecting actions if client crashes after sending an update
-        deviceSequenceNumber = max(
-            deviceSequenceNumber,
-            greatestSeenDeviceSequenceNumber
+        update(
+            localState: LocalState(
+                // avoid server rejecting actions if client crashes after sending an update
+                deviceSequenceNumber: max(
+                    localState.deviceSequenceNumber,
+                    greatestSeenDeviceSequenceNumber
+                ),
+                placements: placements,
+                unsyncedActions: localState.unsyncedActions.filter {
+                    sequencedAction in
+                    sequencedAction.deviceSequenceNumber
+                        > greatestSeenDeviceSequenceNumber
+                }
+            )
         )
-        syncedPlacements = placements
     }
 }
