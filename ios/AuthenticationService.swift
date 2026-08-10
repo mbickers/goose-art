@@ -69,11 +69,11 @@ class AuthenticationService {
         let response = try? await URLSession.shared.data(for: request).1
 
         guard let response = response as? HTTPURLResponse else {
-            state = .unauthenticated(reason: "Couldn't reach the server.")
+            state = .unauthenticated(reason: "couldn't reach the server.")
             return
         }
         guard response.statusCode == 200 else {
-            state = .unauthenticated(reason: "That code didn't work.")
+            state = .unauthenticated(reason: "that code didn't work.")
             return
         }
         startSession(token: token)
@@ -90,7 +90,7 @@ class AuthenticationService {
                 deviceId: deviceId(),
                 onAuthenticationFailed: { [weak self] in
                     Task { @MainActor in
-                        self?.logout(reason: "Authentication failure")
+                        self?.logout(reason: "authentication failure")
                     }
                 }
             )

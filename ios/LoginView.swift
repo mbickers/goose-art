@@ -4,6 +4,17 @@ struct LoginView: View {
     let authenticationService: AuthenticationService
     @State private var codeInput: String = ""
     @State private var loggingIn = false
+    @FocusState private var codeFieldFocused: Bool
+
+    private var canSubmit: Bool {
+        return !codeInput.isEmpty && !loggingIn
+    }
+
+    private var failureReason: String? {
+        guard case .unauthenticated(let reason) = authenticationService.state
+        else { return nil }
+        return reason
+    }
 
     private func performLogin() {
         loggingIn = true
@@ -14,50 +25,49 @@ struct LoginView: View {
     }
 
     var body: some View {
-        // TODO: fix look
         VStack(spacing: 20) {
-            Image(systemName: "person.circle.fill")
-                .font(.system(size: 80))
-                .foregroundStyle(.secondary)
+            Text("🦆🪿")
+                .font(.rounded(size: 70))
 
-            Text("Not Authenticated")
-                .font(.title)
-                .fontWeight(.bold)
+            Text("goose art")
+                .font(.rounded(size: 44, weight: .heavy))
+                .foregroundColor(Palette.pink)
 
-            switch authenticationService.state {
-            case .unauthenticated(let reason?):
-                Text(reason)
-                    .font(.body)
-                    .foregroundStyle(.secondary)
+            if let failureReason {
+                Text(failureReason)
+                    .font(.rounded(size: 16, weight: .semibold))
+                    .foregroundColor(Palette.pink)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-            default:
-                EmptyView()
             }
 
-            VStack(spacing: 12) {
-                TextField("Access code", text: $codeInput)
-                    .textFieldStyle(.roundedBorder)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .frame(maxWidth: 300)
-                    .submitLabel(.go)
-                    .onSubmit(performLogin)
+            TextField(
+                "",
+                text: $codeInput,
+                prompt: Text("access code").foregroundColor(Palette.darkPurple.opacity(0.5))
+            )
+            .focused($codeFieldFocused)
+            .onAppear { codeFieldFocused = true }
+            .tint(Palette.darkPurple)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .submitLabel(.go)
+            .onSubmit(performLogin)
+            .font(.rounded(size: 20, weight: .semibold))
+            .foregroundColor(Palette.darkPurple)
+            .multilineTextAlignment(.center)
+            .frame(height: 50)
+            .modifier(ButtonSurface(color: Palette.yellow, dimmed: false))
 
-                Button(action: performLogin) {
-                    if loggingIn {
-                        ProgressView()
-                    } else {
-                        Text("Login")
-                    }
-                }
-                .frame(maxWidth: 300)
-                .buttonStyle(.borderedProminent)
-                .disabled(codeInput.isEmpty || loggingIn)
-            }
-            .padding(.top)
+            CustomButton(
+                content: loggingIn ? .progress : .text("login"),
+                enabled: canSubmit,
+                action: performLogin
+            )
         }
-        .padding()
+        .padding(30)
+        .frame(maxWidth: 400)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Palette.purple)
     }
 }
 

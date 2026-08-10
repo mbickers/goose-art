@@ -49,80 +49,6 @@ func lastEmojiInString(_ string: String) -> Emoji? {
     return string.compactMap { Emoji($0) }.last
 }
 
-let blue = Color(hex: "8DE8E8")
-let darkPurple = Color(hex: "2A053E")
-let purple = Color(hex: "3D3E5A")
-let yellow = Color(hex: "F4C77F")
-let pink = Color(hex: "E8A5B3")
-
-struct RoundedBorder: ViewModifier {
-    let cornerRadius: CGFloat
-    let lineWidth: CGFloat
-
-    func body(content: Content) -> some View {
-        let shape = RoundedRectangle(
-            cornerRadius: cornerRadius,
-            style: .continuous
-        )
-        content
-            .clipShape(shape)
-            .overlay(
-                shape.stroke(darkPurple, lineWidth: lineWidth)
-            )
-            .padding(lineWidth / 2)
-    }
-}
-
-let buttonBorder = RoundedBorder(cornerRadius: 20, lineWidth: 6)
-
-struct ButtonSurface: ViewModifier {
-    let color: Color
-    let dimmed: Bool
-
-    func body(content: Content) -> some View {
-        content
-            .background(color)
-            .opacity(dimmed ? 0.5 : 1)
-            .modifier(buttonBorder)
-    }
-}
-
-struct EmojiButton: ViewModifier {
-    let color: Color
-    let dimmed: Bool
-
-    func body(content: Content) -> some View {
-        content
-            .font(.system(size: 40))
-            .frame(width: 60, height: 60)
-            .modifier(ButtonSurface(color: color, dimmed: dimmed))
-    }
-}
-
-struct ActionButton: View {
-    let iconName: String
-    let action: () -> Void
-    let enabled: Bool
-
-    init(iconName: String, enabled: Bool = true, action: @escaping () -> Void) {
-        self.iconName = iconName
-        self.enabled = enabled
-        self.action = action
-    }
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: iconName)
-                .font(.system(size: 20, weight: .heavy))
-                .foregroundColor(buttonIconColor)
-                .frame(maxWidth: .infinity)
-                .frame(height: 40)
-                .modifier(ButtonSurface(color: yellow, dimmed: !enabled))
-        }
-        .disabled(!enabled)
-    }
-}
-
 struct GeometryTracker: ViewModifier {
     @Binding var binding: CGRect?
 
@@ -158,8 +84,6 @@ struct Debug: View {
             .foregroundColor(.black)
     }
 }
-
-private let buttonIconColor = darkPurple.opacity(0.5)
 
 struct CanvasView: View {
     let placementService: FrontendCanvasService
@@ -330,8 +254,8 @@ struct CanvasView: View {
         ZStack {
             if emojiFieldValue == "" {
                 Image(systemName: "plus")
-                    .font(.system(size: 30, weight: .semibold))
-                    .foregroundColor(buttonIconColor)
+                    .font(.rounded(size: 30, weight: .semibold))
+                    .foregroundColor(Palette.darkPurple.opacity(0.5))
             }
 
             TextField("", text: $emojiFieldValue)
@@ -385,7 +309,7 @@ struct CanvasView: View {
     {
         if let canvasFrame = canvasFrame {
             Text(placement.emoji.stringValue)
-                .font(.system(size: canvasFrame.height * placement.scale))
+                .font(.rounded(size: canvasFrame.height * placement.scale))
                 // the canvas proposes less width than the full-screen drag preview,
                 // so without this a large glyph gets a narrower frame in one than
                 // the other and .position centers them differently
@@ -402,7 +326,7 @@ struct CanvasView: View {
             VStack(spacing: 10) {
                 ZStack {
                     Rectangle()
-                        .fill(blue)
+                        .fill(Palette.blue)
 
                     if let canvasFrame {
                         ForEach(
@@ -441,9 +365,11 @@ struct CanvasView: View {
                 .aspectRatio(1, contentMode: .fit)
 
                 HStack(spacing: 10) {
-                    ActionButton(
-                        iconName:
-                            "arrow.left.and.right.righttriangle.left.righttriangle.right",
+                    CustomButton(
+                        content: .icon(
+                            systemName:
+                                "arrow.left.and.right.righttriangle.left.righttriangle.right"
+                        ),
                         enabled: activePlacementState != nil
                     ) {
                         if let dragState = activePlacementState {
@@ -455,8 +381,8 @@ struct CanvasView: View {
                         }
                     }
 
-                    ActionButton(
-                        iconName: "gearshape",
+                    CustomButton(
+                        content: .icon(systemName: "gearshape"),
                         enabled: activePlacementState == nil
                     ) {
                         showingSettings = true
@@ -470,7 +396,7 @@ struct CanvasView: View {
                         let dimmed = activePlacementState != nil
 
                         emojiTextField
-                            .modifier(EmojiButton(color: yellow, dimmed: dimmed))
+                            .modifier(EmojiButton(color: Palette.yellow, dimmed: dimmed))
 
                         ForEach(recentEmojisStore.recentEmojis, id: \.self) {
                             emoji in
@@ -478,7 +404,7 @@ struct CanvasView: View {
                                 .gesture(
                                     makePaletteDragGesture(emoji: emoji)
                                 )
-                                .modifier(EmojiButton(color: pink, dimmed: dimmed))
+                                .modifier(EmojiButton(color: Palette.pink, dimmed: dimmed))
                         }
                     }
                 }
@@ -498,7 +424,7 @@ struct CanvasView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(purple)
+        .background(Palette.purple)
         .confirmationDialog("Settings", isPresented: $showingSettings) {
             Button("Clear", role: .destructive, action: placementService.clear)
             Button("Log out", role: .destructive) {
