@@ -3,9 +3,14 @@ import SwiftUI
 struct LoginView: View {
     let authenticationService: AuthenticationService
     @State private var codeInput: String = ""
+    @State private var loggingIn = false
 
     private func performLogin() {
-        authenticationService.login(token: codeInput)
+        loggingIn = true
+        Task {
+            await authenticationService.login(token: codeInput)
+            loggingIn = false
+        }
     }
 
     var body: some View {
@@ -39,10 +44,16 @@ struct LoginView: View {
                     .submitLabel(.go)
                     .onSubmit(performLogin)
 
-                Button("Login", action: performLogin)
-                    .frame(maxWidth: 300)
-                    .buttonStyle(.borderedProminent)
-                    .disabled(codeInput.isEmpty)
+                Button(action: performLogin) {
+                    if loggingIn {
+                        ProgressView()
+                    } else {
+                        Text("Login")
+                    }
+                }
+                .frame(maxWidth: 300)
+                .buttonStyle(.borderedProminent)
+                .disabled(codeInput.isEmpty || loggingIn)
             }
             .padding(.top)
         }

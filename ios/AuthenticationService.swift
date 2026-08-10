@@ -43,19 +43,47 @@ private func saveLocalState(_ localState: LocalState, token: String) {
 @Observable
 class AuthenticationService {
     private let baseURL: URL?
+    private var canvasClient: CanvasClient?
 
     var state: AuthenticationState = .unauthenticated(reason: nil)
 
     init(baseURL: URL?) {
         self.baseURL = baseURL
+        // a stored token is trusted without asking the server, so the app still opens
+        // with its local canvas offline. a revoked one is caught by the websocket 403
         if let token = TokenStore.load() {
-            login(token: token)
+            startSession(token: token)
         }
     }
 
-    func login(token: String) {
+    // checks the token before authenticating, so a bad code shows an error on the login
+    // screen instead of flashing the canvas and being kicked back by the websocket
+    func login(token: String) async {
+        guard let baseURL else {
+            startSession(token: token)
+            return
+        }
+
+        var request = URLRequest(url: baseURL.appendingPathComponent("login"))
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let response = try? await URLSession.shared.data(for: request).1
+
+        guard let response = response as? HTTPURLResponse else {
+            state = .unauthenticated(reason: "Couldn't reach the server.")
+            return
+        }
+        guard response.statusCode == 200 else {
+            state = .unauthenticated(reason: "That code didn't work.")
+            return
+        }
+        startSession(token: token)
+    }
+
+    private func startSession(token: String) {
+        canvasClient?.disconnect()
         TokenStore.save(token)
-        let canvasClient = baseURL.map { baseURL in
+
+        let client = baseURL.map { baseURL in
             CanvasClient(
                 baseURL: baseURL,
                 token: token,
@@ -67,9 +95,10 @@ class AuthenticationService {
                 }
             )
         }
+        canvasClient = client
         state = .authenticated(
             canvasService: FrontendCanvasService(
-                canvasClient: canvasClient,
+                canvasClient: client,
                 initialState: loadLocalState(token: token),
                 persistState: { localState in
                     saveLocalState(localState, token: token)
@@ -79,6 +108,8 @@ class AuthenticationService {
     }
 
     func logout(reason: String? = nil) {
+        canvasClient?.disconnect()
+        canvasClient = nil
         TokenStore.clear()
         state = .unauthenticated(reason: reason)
     }

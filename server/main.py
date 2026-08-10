@@ -99,6 +99,14 @@ async def canvas_handler(
         unsubscribe()
 
 
+@app.get("/login")
+async def login(authorization: Annotated[str | None, Header()] = None):
+    user_id = authenticated_user_id(authorization)
+    if user_id is None or user_id not in users:
+        raise HTTPException(status_code=401)
+    return {"userId": user_id}
+
+
 # TODO: remove
 @app.get("/inspect")
 async def inspect_canvas(authorization: Annotated[str | None, Header()] = None):

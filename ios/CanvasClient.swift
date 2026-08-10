@@ -15,6 +15,7 @@ class CanvasClient {
 
     private var socket: URLSessionWebSocketTask?
     private var queuedPayload: String?
+    private var connectionTask: Task<Void, Never>?
 
     init(
         baseURL: URL,
@@ -45,11 +46,20 @@ class CanvasClient {
 
         self.onError = onError
         self.onAuthenticationFailed = onAuthenticationFailed
-        Task { await connect() }
+        connectionTask = Task { await connect() }
+    }
+
+    // the connection task retains this client, so without an explicit teardown a client
+    // outlives the session that made it and keeps reconnecting with a stale token
+    func disconnect() {
+        connectionTask?.cancel()
+        connectionTask = nil
+        socket?.cancel(with: .goingAway, reason: nil)
+        socket = nil
     }
 
     private func connect() async {
-        while true {
+        while !Task.isCancelled {
             let socket = URLSession.shared.webSocketTask(with: canvasRequest)
             socket.resume()
             self.socket = socket
@@ -62,6 +72,7 @@ class CanvasClient {
                 }
             } catch {
                 self.socket = nil
+                if Task.isCancelled { return }
                 // the server rejects the handshake with 403 when the token is bad,
                 // so retrying would spin forever against a credential that cannot work
                 if (socket.response as? HTTPURLResponse)?.statusCode == 403 {
@@ -71,7 +82,8 @@ class CanvasClient {
                 onError?(
                     "Error receiving message: \(error.localizedDescription)"
                 )
-                try! await Task.sleep(for: .seconds(reconnectDelay))
+                // try? because sleep throws when the task is cancelled mid-wait
+                try? await Task.sleep(for: .seconds(reconnectDelay))
             }
         }
     }
