@@ -1,10 +1,10 @@
 import Foundation
 
 class CanvasClient {
-    let userId: String
-    private let canvasURL: URL
+    private let canvasRequest: URLRequest
     private let reconnectDelay: TimeInterval = 1.0
     private let onError: ((String) -> Void)?
+    private let onAuthenticationFailed: (() -> Void)?
 
     private var serverMessageSubscribers: [(ServerMessage) -> Void] = []
     private(set) var mostRecentServerMessage: ServerMessage?
@@ -18,30 +18,39 @@ class CanvasClient {
 
     init(
         baseURL: URL,
-        userId: String,
+        token: String,
         deviceId: String,
-        onError: ((String) -> Void)? = nil
+        onError: ((String) -> Void)? = nil,
+        onAuthenticationFailed: (() -> Void)? = nil
     ) {
-        self.userId = userId
-
         var components = URLComponents(
             url: baseURL,
             resolvingAgainstBaseURL: false
         )!
         components.scheme = baseURL.scheme == "https" ? "wss" : "ws"
-        canvasURL = components.url!.appendingPathComponent("canvas").appending(
-            queryItems: [
-                URLQueryItem(name: "userId", value: userId),
-                URLQueryItem(name: "deviceId", value: deviceId),
-            ])
+        let canvasURL = components.url!.appendingPathComponent("canvas")
+            .appending(
+                queryItems: [
+                    URLQueryItem(name: "deviceId", value: deviceId)
+                ])
+
+        // the token goes in a header rather than the query string, which uvicorn
+        // writes to its access log in cleartext on every connect
+        var canvasRequest = URLRequest(url: canvasURL)
+        canvasRequest.setValue(
+            "Bearer \(token)",
+            forHTTPHeaderField: "Authorization"
+        )
+        self.canvasRequest = canvasRequest
 
         self.onError = onError
+        self.onAuthenticationFailed = onAuthenticationFailed
         Task { await connect() }
     }
 
     private func connect() async {
         while true {
-            let socket = URLSession.shared.webSocketTask(with: canvasURL)
+            let socket = URLSession.shared.webSocketTask(with: canvasRequest)
             socket.resume()
             self.socket = socket
             maybeSendQueuedPayload()
@@ -53,6 +62,12 @@ class CanvasClient {
                 }
             } catch {
                 self.socket = nil
+                // the server rejects the handshake with 403 when the token is bad,
+                // so retrying would spin forever against a credential that cannot work
+                if (socket.response as? HTTPURLResponse)?.statusCode == 403 {
+                    onAuthenticationFailed?()
+                    return
+                }
                 onError?(
                     "Error receiving message: \(error.localizedDescription)"
                 )

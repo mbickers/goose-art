@@ -1,3 +1,4 @@
+import CryptoKit
 import SwiftUI
 
 enum AuthenticationState {
@@ -15,24 +16,27 @@ private func deviceId() -> String {
     return newId
 }
 
-// keyed by user so that logging in as someone else doesn't replay their actions
-private func localStateKey(userId: String) -> String {
-    return "canvasLocalState-\(userId)"
+// keyed by token so that logging in as someone else doesn't replay their actions,
+// and digested so that the token itself stays out of UserDefaults
+private func localStateKey(token: String) -> String {
+    let digest = SHA256.hash(data: Data(token.utf8))
+    let hex = digest.map { byte in String(format: "%02x", byte) }.joined()
+    return "canvasLocalState-\(hex.prefix(16))"
 }
 
-private func loadLocalState(userId: String) -> LocalState? {
+private func loadLocalState(token: String) -> LocalState? {
     guard
         let data = UserDefaults.standard.data(
-            forKey: localStateKey(userId: userId)
+            forKey: localStateKey(token: token)
         )
     else { return nil }
     return try? JSONDecoder().decode(LocalState.self, from: data)
 }
 
-private func saveLocalState(_ localState: LocalState, userId: String) {
+private func saveLocalState(_ localState: LocalState, token: String) {
     UserDefaults.standard.set(
         try! JSONEncoder().encode(localState),
-        forKey: localStateKey(userId: userId)
+        forKey: localStateKey(token: token)
     )
 }
 
@@ -42,32 +46,40 @@ class AuthenticationService {
 
     var state: AuthenticationState = .unauthenticated(reason: nil)
 
-    // TODO: fix placeholders/remove login call in init
     init(baseURL: URL?) {
         self.baseURL = baseURL
-        login(userId: "max")
+        if let token = TokenStore.load() {
+            login(token: token)
+        }
     }
 
-    func login(userId: String) {
+    func login(token: String) {
+        TokenStore.save(token)
         let canvasClient = baseURL.map { baseURL in
             CanvasClient(
                 baseURL: baseURL,
-                userId: userId,
-                deviceId: deviceId()
+                token: token,
+                deviceId: deviceId(),
+                onAuthenticationFailed: { [weak self] in
+                    Task { @MainActor in
+                        self?.logout(reason: "Authentication failure")
+                    }
+                }
             )
         }
         state = .authenticated(
             canvasService: FrontendCanvasService(
                 canvasClient: canvasClient,
-                initialState: loadLocalState(userId: userId),
+                initialState: loadLocalState(token: token),
                 persistState: { localState in
-                    saveLocalState(localState, userId: userId)
+                    saveLocalState(localState, token: token)
                 }
             )
         )
     }
 
-    func logout() {
-        state = .unauthenticated(reason: nil)
+    func logout(reason: String? = nil) {
+        TokenStore.clear()
+        state = .unauthenticated(reason: reason)
     }
 }

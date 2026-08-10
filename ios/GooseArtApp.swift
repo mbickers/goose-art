@@ -1,10 +1,10 @@
 import SwiftUI
 
-// pass URL(string: "http://localhost:8000") to work against the server
+// pass nil to work offline, or URL(string: "http://localhost:8000") for a local server
 @main
 struct GooseArtApp: App {
     @State private var authenticationService = AuthenticationService(
-        baseURL: nil
+        baseURL: URL(string: "https://goose-art.maxbickers.com")
     )
 
     var body: some Scene {
@@ -13,7 +13,7 @@ struct GooseArtApp: App {
             case .authenticated(let canvasService):
                 CanvasView(
                     placementService: canvasService,
-                    logout: authenticationService.logout
+                    logout: { authenticationService.logout() }
                 )
 
             case .unauthenticated(_):

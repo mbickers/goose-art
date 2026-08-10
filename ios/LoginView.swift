@@ -2,10 +2,10 @@ import SwiftUI
 
 struct LoginView: View {
     let authenticationService: AuthenticationService
-    @State private var userIdInput: String = ""
+    @State private var codeInput: String = ""
 
     private func performLogin() {
-        authenticationService.login(userId: userIdInput)
+        authenticationService.login(token: codeInput)
     }
 
     var body: some View {
@@ -31,7 +31,7 @@ struct LoginView: View {
             }
 
             VStack(spacing: 12) {
-                TextField("User ID", text: $userIdInput)
+                TextField("Access code", text: $codeInput)
                     .textFieldStyle(.roundedBorder)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -42,6 +42,7 @@ struct LoginView: View {
                 Button("Login", action: performLogin)
                     .frame(maxWidth: 300)
                     .buttonStyle(.borderedProminent)
+                    .disabled(codeInput.isEmpty)
             }
             .padding(.top)
         }
