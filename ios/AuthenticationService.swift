@@ -51,7 +51,8 @@ private func saveLocalState(
 @Observable
 class AuthenticationService {
     private let baseURL: URL?
-    private var canvasConnection: DistributedStateMachineConnection<[Placement], CanvasAction>?
+    private var canvasConnection:
+        AuthenticatedWebSocket<ServerMessage<[Placement]>, ClientMessage<CanvasAction>>?
 
     var state: AuthenticationState = .unauthenticated(reason: nil)
 
@@ -92,11 +93,11 @@ class AuthenticationService {
         TokenStore.save(token)
 
         let connection = baseURL.map { baseURL in
-            DistributedStateMachineConnection<[Placement], CanvasAction>(
+            AuthenticatedWebSocket<ServerMessage<[Placement]>, ClientMessage<CanvasAction>>(
                 baseURL: baseURL,
                 path: "canvas",
+                queryItems: [URLQueryItem(name: "deviceId", value: deviceId())],
                 token: token,
-                deviceId: deviceId(),
                 onAuthenticationFailed: { [weak self] in
                     Task { @MainActor in
                         self?.logout(reason: "authentication failure")

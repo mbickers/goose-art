@@ -1,16 +1,23 @@
 import Foundation
 
-class DistributedStateMachineConnection<State: Codable, Action: Codable> {
+// Maintains a bearer-token-authenticated websocket, reconnecting after transient
+// failures. Generic over the message types, with two stipulations on the protocol
+// it carries:
+// - Outbound: holds a single latest message, replacing any unsent one, and re-sends
+//   it on every reconnect. Messages must be complete and idempotent, not deltas.
+// - Inbound: only the most recent message is cached for late subscribers, so each
+//   message must be a self-contained snapshot.
+class AuthenticatedWebSocket<Inbound: Decodable, Outbound: Encodable> {
     private let request: URLRequest
     private let reconnectDelay: TimeInterval = 1.0
     private let onError: ((String) -> Void)?
     private let onAuthenticationFailed: (() -> Void)?
 
-    private var serverMessageSubscribers: [(ServerMessage<State>) -> Void] = []
-    private(set) var mostRecentServerMessage: ServerMessage<State>?
+    private var subscribers: [(Inbound) -> Void] = []
+    private(set) var mostRecentMessage: Inbound?
 
-    func subscribeToServerMessages(_ callback: @escaping (ServerMessage<State>) -> Void) {
-        serverMessageSubscribers.append(callback)
+    func subscribe(_ callback: @escaping (Inbound) -> Void) {
+        subscribers.append(callback)
     }
 
     private var socket: URLSessionWebSocketTask?
@@ -20,8 +27,8 @@ class DistributedStateMachineConnection<State: Codable, Action: Codable> {
     init(
         baseURL: URL,
         path: String,
+        queryItems: [URLQueryItem] = [],
         token: String,
-        deviceId: String,
         onError: ((String) -> Void)? = nil,
         onAuthenticationFailed: (() -> Void)? = nil
     ) {
@@ -31,10 +38,7 @@ class DistributedStateMachineConnection<State: Codable, Action: Codable> {
         )!
         components.scheme = baseURL.scheme == "https" ? "wss" : "ws"
         let url = components.url!.appendingPathComponent(path)
-            .appending(
-                queryItems: [
-                    URLQueryItem(name: "deviceId", value: deviceId)
-                ])
+            .appending(queryItems: queryItems)
 
         // the token goes in a header rather than the query string, which uvicorn
         // writes to its access log in cleartext on every connect
@@ -99,17 +103,17 @@ class DistributedStateMachineConnection<State: Codable, Action: Codable> {
                 return
             }
             do {
-                let serverMessage = try JSONDecoder().decode(
-                    ServerMessage<State>.self,
+                let inbound = try JSONDecoder().decode(
+                    Inbound.self,
                     from: data
                 )
-                mostRecentServerMessage = serverMessage
-                for subscriber in serverMessageSubscribers {
-                    subscriber(serverMessage)
+                mostRecentMessage = inbound
+                for subscriber in subscribers {
+                    subscriber(inbound)
                 }
             } catch {
                 onError?(
-                    "Error decoding server message: \(error.localizedDescription)"
+                    "Error decoding message: \(error.localizedDescription)"
                 )
             }
         case .data:
@@ -123,17 +127,15 @@ class DistributedStateMachineConnection<State: Codable, Action: Codable> {
         }
     }
 
-    func updateActionsToSend(_ actionsToSend: [SequencedAction<Action>]) {
-        if actionsToSend.count > 0 {
-            let data = try! JSONEncoder().encode(ClientMessage(actions: actionsToSend))
-            self.queuedPayload = String(data: data, encoding: .utf8)!
-        } else {
-            self.queuedPayload = nil
+    // nil clears the outbox so nothing is re-sent on the next reconnect
+    func setOutbound(_ message: Outbound?) {
+        queuedPayload = message.map { message in
+            String(data: try! JSONEncoder().encode(message), encoding: .utf8)!
         }
         maybeSendQueuedPayload()
     }
 
-    func maybeSendQueuedPayload() {
+    private func maybeSendQueuedPayload() {
         guard let queuedPayload else { return }
         guard let socket else { return }
         Task {
@@ -141,18 +143,8 @@ class DistributedStateMachineConnection<State: Codable, Action: Codable> {
                 try await socket.send(.string(queuedPayload))
             } catch {
                 self.socket = nil
-                onError?("Error sending actions: \(error.localizedDescription)")
+                onError?("Error sending message: \(error.localizedDescription)")
             }
         }
     }
-
-}
-
-struct ClientMessage<Action: Codable>: Codable {
-    let actions: [SequencedAction<Action>]
-}
-
-struct ServerMessage<State: Codable>: Codable {
-    let greatestSeenDeviceSequenceNumber: Int
-    let state: State
 }

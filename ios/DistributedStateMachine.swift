@@ -5,6 +5,15 @@ struct SequencedAction<Action: Codable>: Codable {
     let deviceSequenceNumber: Int
 }
 
+struct ClientMessage<Action: Codable>: Codable {
+    let actions: [SequencedAction<Action>]
+}
+
+struct ServerMessage<State: Codable>: Codable {
+    let greatestSeenDeviceSequenceNumber: Int
+    let state: State
+}
+
 struct DistributedStateMachineLocalState<State: Codable, Action: Codable>: Codable {
     let deviceSequenceNumber: Int
     let confirmedState: State
@@ -12,7 +21,7 @@ struct DistributedStateMachineLocalState<State: Codable, Action: Codable>: Codab
 }
 
 @Observable class DistributedStateMachineClient<State: Codable, Action: Codable> {
-    private let connection: DistributedStateMachineConnection<State, Action>?
+    private let connection: AuthenticatedWebSocket<ServerMessage<State>, ClientMessage<Action>>?
     private let reduce: (State, Action) -> State
     private let persistState: ((DistributedStateMachineLocalState<State, Action>) -> Void)?
 
@@ -21,7 +30,7 @@ struct DistributedStateMachineLocalState<State: Codable, Action: Codable>: Codab
     init(
         initialState: State,
         reduce: @escaping (State, Action) -> State,
-        connection: DistributedStateMachineConnection<State, Action>? = nil,
+        connection: AuthenticatedWebSocket<ServerMessage<State>, ClientMessage<Action>>? = nil,
         localState: DistributedStateMachineLocalState<State, Action>? = nil,
         persistState: ((DistributedStateMachineLocalState<State, Action>) -> Void)? = nil
     ) {
@@ -36,24 +45,29 @@ struct DistributedStateMachineLocalState<State: Codable, Action: Codable>: Codab
                 unsyncedActions: []
             )
 
-        if let message = connection?.mostRecentServerMessage {
+        if let message = connection?.mostRecentMessage {
             serverUpdate(
                 greatestSeenDeviceSequenceNumber: message.greatestSeenDeviceSequenceNumber,
                 state: message.state
             )
         }
-        connection?.subscribeToServerMessages { [weak self] message in
+        connection?.subscribe { [weak self] message in
             self?.serverUpdate(
                 greatestSeenDeviceSequenceNumber: message.greatestSeenDeviceSequenceNumber,
                 state: message.state
             )
         }
-        connection?.updateActionsToSend(self.localState.unsyncedActions)
+        pushUnsyncedActions()
     }
 
     private func update(localState: DistributedStateMachineLocalState<State, Action>) {
         self.localState = localState
         persistState?(localState)
+    }
+
+    private func pushUnsyncedActions() {
+        let actions = localState.unsyncedActions
+        connection?.setOutbound(actions.isEmpty ? nil : ClientMessage(actions: actions))
     }
 
     var state: State {
@@ -64,22 +78,20 @@ struct DistributedStateMachineLocalState<State: Codable, Action: Codable>: Codab
 
     func apply(_ action: Action) {
         let deviceSequenceNumber = localState.deviceSequenceNumber + 1
-        let unsyncedActions =
-            localState.unsyncedActions
-            + [
-                SequencedAction(
-                    action: action,
-                    deviceSequenceNumber: deviceSequenceNumber
-                )
-            ]
         update(
             localState: DistributedStateMachineLocalState(
                 deviceSequenceNumber: deviceSequenceNumber,
                 confirmedState: localState.confirmedState,
-                unsyncedActions: unsyncedActions
+                unsyncedActions: localState.unsyncedActions
+                    + [
+                        SequencedAction(
+                            action: action,
+                            deviceSequenceNumber: deviceSequenceNumber
+                        )
+                    ]
             )
         )
-        connection?.updateActionsToSend(unsyncedActions)
+        pushUnsyncedActions()
     }
 
     // the server holds state in memory, so a restart pushes the initial state and a
