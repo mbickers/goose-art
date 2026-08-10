@@ -61,23 +61,29 @@ class ClearAction:
 Action = UpsertAction | RemoveAction | ClearAction
 
 
-@dataclass(kw_only=True)
-class SequencedAction:
-    action: UpsertAction | RemoveAction | ClearAction
-    device_sequence_number: int
+def action_from_json(data: dict[str, Any]) -> Action:
+    action_type = data["type"]
 
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> Self:
-        inner = data["action"]
-        action_type = inner["type"]
+    if action_type == "upsert":
+        return UpsertAction(placement=Placement.from_json(data["placement"]))
+    elif action_type == "remove":
+        return RemoveAction(placement_id=data["placementId"])
+    elif action_type == "clear":
+        return ClearAction()
+    else:
+        raise ValueError(f"Unknown action type: {action_type}")
 
-        if action_type == "upsert":
-            action = UpsertAction(placement=Placement.from_json(inner["placement"]))
-        elif action_type == "remove":
-            action = RemoveAction(placement_id=inner["placementId"])
-        elif action_type == "clear":
-            action = ClearAction()
-        else:
-            raise ValueError(f"Unknown action type: {action_type}")
 
-        return cls(action=action, device_sequence_number=data["deviceSequenceNumber"])
+def reduce_canvas(state: list[Placement], action: Action) -> list[Placement]:
+    match action:
+        case UpsertAction(placement=placement):
+            # an upserted placement moves to the top of the z-order
+            return [p for p in state if p.id != placement.id] + [placement]
+        case RemoveAction(placement_id=placement_id):
+            return [p for p in state if p.id != placement_id]
+        case ClearAction():
+            return []
+
+
+def placements_to_json(placements: list[Placement]) -> list[dict[str, Any]]:
+    return [p.to_json() for p in placements]

@@ -1,15 +1,15 @@
 import Foundation
 
-class CanvasClient {
-    private let canvasRequest: URLRequest
+class DistributedStateMachineConnection<State: Codable, Action: Codable> {
+    private let request: URLRequest
     private let reconnectDelay: TimeInterval = 1.0
     private let onError: ((String) -> Void)?
     private let onAuthenticationFailed: (() -> Void)?
 
-    private var serverMessageSubscribers: [(ServerMessage) -> Void] = []
-    private(set) var mostRecentServerMessage: ServerMessage?
+    private var serverMessageSubscribers: [(ServerMessage<State>) -> Void] = []
+    private(set) var mostRecentServerMessage: ServerMessage<State>?
 
-    func subscribeToServerMessages(_ callback: @escaping (ServerMessage) -> Void) {
+    func subscribeToServerMessages(_ callback: @escaping (ServerMessage<State>) -> Void) {
         serverMessageSubscribers.append(callback)
     }
 
@@ -19,6 +19,7 @@ class CanvasClient {
 
     init(
         baseURL: URL,
+        path: String,
         token: String,
         deviceId: String,
         onError: ((String) -> Void)? = nil,
@@ -29,7 +30,7 @@ class CanvasClient {
             resolvingAgainstBaseURL: false
         )!
         components.scheme = baseURL.scheme == "https" ? "wss" : "ws"
-        let canvasURL = components.url!.appendingPathComponent("canvas")
+        let url = components.url!.appendingPathComponent(path)
             .appending(
                 queryItems: [
                     URLQueryItem(name: "deviceId", value: deviceId)
@@ -37,19 +38,19 @@ class CanvasClient {
 
         // the token goes in a header rather than the query string, which uvicorn
         // writes to its access log in cleartext on every connect
-        var canvasRequest = URLRequest(url: canvasURL)
-        canvasRequest.setValue(
+        var request = URLRequest(url: url)
+        request.setValue(
             "Bearer \(token)",
             forHTTPHeaderField: "Authorization"
         )
-        self.canvasRequest = canvasRequest
+        self.request = request
 
         self.onError = onError
         self.onAuthenticationFailed = onAuthenticationFailed
         connectionTask = Task { await connect() }
     }
 
-    // the connection task retains this client, so without an explicit teardown a client
+    // the connection task retains this connection, so without an explicit teardown it
     // outlives the session that made it and keeps reconnecting with a stale token
     func disconnect() {
         connectionTask?.cancel()
@@ -60,7 +61,7 @@ class CanvasClient {
 
     private func connect() async {
         while !Task.isCancelled {
-            let socket = URLSession.shared.webSocketTask(with: canvasRequest)
+            let socket = URLSession.shared.webSocketTask(with: request)
             socket.resume()
             self.socket = socket
             maybeSendQueuedPayload()
@@ -99,7 +100,7 @@ class CanvasClient {
             }
             do {
                 let serverMessage = try JSONDecoder().decode(
-                    ServerMessage.self,
+                    ServerMessage<State>.self,
                     from: data
                 )
                 mostRecentServerMessage = serverMessage
@@ -122,7 +123,7 @@ class CanvasClient {
         }
     }
 
-    func updateActionsToSend(_ actionsToSend: [SequencedAction]) {
+    func updateActionsToSend(_ actionsToSend: [SequencedAction<Action>]) {
         if actionsToSend.count > 0 {
             let data = try! JSONEncoder().encode(ClientMessage(actions: actionsToSend))
             self.queuedPayload = String(data: data, encoding: .utf8)!
@@ -147,11 +148,11 @@ class CanvasClient {
 
 }
 
-struct ClientMessage: Codable {
-    let actions: [SequencedAction]
+struct ClientMessage<Action: Codable>: Codable {
+    let actions: [SequencedAction<Action>]
 }
 
-struct ServerMessage: Codable, Equatable {
+struct ServerMessage<State: Codable>: Codable {
     let greatestSeenDeviceSequenceNumber: Int
-    let placements: [Placement]
+    let state: State
 }

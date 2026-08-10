@@ -86,7 +86,7 @@ struct Debug: View {
 }
 
 struct CanvasView: View {
-    let placementService: FrontendCanvasService
+    let placementService: DistributedStateMachineClient<[Placement], CanvasAction>
     let logout: (() -> Void)?
 
     @State private var recentEmojisStore = RecentEmojiService()
@@ -169,12 +169,12 @@ struct CanvasView: View {
 
         switch (state.source, state.placement.hasValidPosition) {
         case (.palette, true):
-            placementService.upsertPlacement(state.placement)
+            placementService.apply(.upsert(placement: state.placement))
             recentEmojisStore.emojiUsed(state.placement.emoji)
         case (.canvas, true):
-            placementService.upsertPlacement(state.placement)
+            placementService.apply(.upsert(placement: state.placement))
         case (.canvas, false):
-            placementService.remove(placementId: state.placement.id)
+            placementService.apply(.remove(placementId: state.placement.id))
         case (.palette, false):
             break
         }
@@ -330,7 +330,7 @@ struct CanvasView: View {
 
                     if let canvasFrame {
                         ForEach(
-                            placementService.placements,
+                            placementService.state,
                             id: \.id
                         ) {
                             placement in
@@ -426,7 +426,9 @@ struct CanvasView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Palette.purple)
         .confirmationDialog("Settings", isPresented: $showingSettings) {
-            Button("Clear", role: .destructive, action: placementService.clear)
+            Button("Clear", role: .destructive) {
+                placementService.apply(.clear)
+            }
             Button("Log out", role: .destructive) {
                 logout?()
             }
@@ -435,5 +437,11 @@ struct CanvasView: View {
 }
 
 #Preview {
-    CanvasView(placementService: FrontendCanvasService(), logout: nil)
+    CanvasView(
+        placementService: DistributedStateMachineClient(
+            initialState: [],
+            reduce: reduceCanvas(state:action:)
+        ),
+        logout: nil
+    )
 }

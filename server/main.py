@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from functools import cache
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated
 from zoneinfo import ZoneInfo
 
 from fastapi import (
@@ -18,8 +18,20 @@ from fastapi import (
 )
 from fastapi.responses import Response
 
-from canvas_service import CanvasService
-from canvas_types import Placement, SequencedAction
+from canvas_types import (
+    Action,
+    Placement,
+    action_from_json,
+    placements_to_json,
+    reduce_canvas,
+)
+from distributed_state_machine import (
+    DistributedStateMachineServer,
+    deserialize_client_message,
+    serialize_server_message,
+)
+
+type CanvasServer = DistributedStateMachineServer[list[Placement], Action]
 
 clear_timezone = ZoneInfo("America/New_York")
 clear_time = time(hour=2)
@@ -39,7 +51,7 @@ async def clear_canvases_daily():
         await asyncio.sleep(seconds_until_next_clear(datetime.now(clear_timezone)))
         # set() because users share canvases, and clearing one twice would broadcast twice
         for canvas in set(static_data().canvases_by_user_id.values()):
-            canvas.clear()
+            canvas.reset()
         print(f"cleared canvases at {datetime.now(clear_timezone)}")
 
 
@@ -60,7 +72,7 @@ static_data_path = Path(__file__).parent / "static_data.json"
 @dataclass(kw_only=True, frozen=True)
 class StaticData:
     user_ids_by_token: dict[str, str]
-    canvases_by_user_id: dict[str, CanvasService]
+    canvases_by_user_id: dict[str, CanvasServer]
 
 
 # validated on load so that every later lookup can index directly: a token whose user
@@ -75,8 +87,9 @@ def static_data() -> StaticData:
     if unassigned:
         raise ValueError(f"users with a token but no canvas: {sorted(unassigned)}")
 
-    canvases = {
-        canvas_id: CanvasService() for canvas_id in set(canvas_ids_by_user_id.values())
+    canvases: dict[str, CanvasServer] = {
+        canvas_id: DistributedStateMachineServer(initial_state=[], reduce=reduce_canvas)
+        for canvas_id in set(canvas_ids_by_user_id.values())
     }
     return StaticData(
         user_ids_by_token=user_ids_by_token,
@@ -97,20 +110,6 @@ def authenticated_user_id(authorization: str | None) -> str | None:
     return user_ids[token]
 
 
-def serialize_server_message(
-    placements: list[Placement],
-    greatest_seen_device_sequence_number: int,
-) -> dict[str, Any]:
-    return {
-        "greatestSeenDeviceSequenceNumber": greatest_seen_device_sequence_number,
-        "placements": [p.to_json() for p in placements],
-    }
-
-
-def deserialize_client_message(data: dict[str, Any]) -> list[SequencedAction]:
-    return [SequencedAction.from_json(action_data) for action_data in data["actions"]]
-
-
 @app.websocket("/canvas")
 async def canvas_handler(
     websocket: WebSocket,
@@ -129,12 +128,15 @@ async def canvas_handler(
 
     def canvas_subscriber(
         *,
-        placements: list[Placement],
+        state: list[Placement],
         greatest_seen_device_sequence_numbers: dict[str, int],
     ):
         msg = serialize_server_message(
-            placements,
-            greatest_seen_device_sequence_numbers.get(device_id, 0),
+            state=state,
+            greatest_seen_device_sequence_number=greatest_seen_device_sequence_numbers.get(
+                device_id, 0
+            ),
+            serialize_state=placements_to_json,
         )
         asyncio.create_task(websocket.send_json(msg))
 
@@ -142,7 +144,9 @@ async def canvas_handler(
     try:
         while True:
             data = await websocket.receive_json()
-            actions = deserialize_client_message(data)
+            actions = deserialize_client_message(
+                data, deserialize_action=action_from_json
+            )
             canvas.process_actions(actions, device_id=device_id)
     except WebSocketDisconnect:
         pass
@@ -166,7 +170,7 @@ async def inspect_canvas(authorization: Annotated[str | None, Header()] = None):
         raise HTTPException(status_code=401)
     canvas = static_data().canvases_by_user_id[user_id]
     data = {
-        "placements": [p.to_json() for p in canvas.placements],
+        "placements": placements_to_json(canvas.state),
         "greatestSeenDeviceSequenceNumbers": canvas.greatest_seen_device_sequence_numbers,
     }
     return Response(

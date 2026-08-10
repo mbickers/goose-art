@@ -2,7 +2,7 @@ import CryptoKit
 import SwiftUI
 
 enum AuthenticationState {
-    case authenticated(canvasService: FrontendCanvasService)
+    case authenticated(canvasService: DistributedStateMachineClient<[Placement], CanvasAction>)
     case unauthenticated(reason: String?)
 }
 
@@ -24,16 +24,24 @@ private func localStateKey(token: String) -> String {
     return "canvasLocalState-\(hex.prefix(16))"
 }
 
-private func loadLocalState(token: String) -> LocalState? {
+private func loadLocalState(
+    token: String
+) -> DistributedStateMachineLocalState<[Placement], CanvasAction>? {
     guard
         let data = UserDefaults.standard.data(
             forKey: localStateKey(token: token)
         )
     else { return nil }
-    return try? JSONDecoder().decode(LocalState.self, from: data)
+    return try? JSONDecoder().decode(
+        DistributedStateMachineLocalState<[Placement], CanvasAction>.self,
+        from: data
+    )
 }
 
-private func saveLocalState(_ localState: LocalState, token: String) {
+private func saveLocalState(
+    _ localState: DistributedStateMachineLocalState<[Placement], CanvasAction>,
+    token: String
+) {
     UserDefaults.standard.set(
         try! JSONEncoder().encode(localState),
         forKey: localStateKey(token: token)
@@ -43,7 +51,7 @@ private func saveLocalState(_ localState: LocalState, token: String) {
 @Observable
 class AuthenticationService {
     private let baseURL: URL?
-    private var canvasClient: CanvasClient?
+    private var canvasConnection: DistributedStateMachineConnection<[Placement], CanvasAction>?
 
     var state: AuthenticationState = .unauthenticated(reason: nil)
 
@@ -80,12 +88,13 @@ class AuthenticationService {
     }
 
     private func startSession(token: String) {
-        canvasClient?.disconnect()
+        canvasConnection?.disconnect()
         TokenStore.save(token)
 
-        let client = baseURL.map { baseURL in
-            CanvasClient(
+        let connection = baseURL.map { baseURL in
+            DistributedStateMachineConnection<[Placement], CanvasAction>(
                 baseURL: baseURL,
+                path: "canvas",
                 token: token,
                 deviceId: deviceId(),
                 onAuthenticationFailed: { [weak self] in
@@ -95,11 +104,13 @@ class AuthenticationService {
                 }
             )
         }
-        canvasClient = client
+        canvasConnection = connection
         state = .authenticated(
-            canvasService: FrontendCanvasService(
-                canvasClient: client,
-                initialState: loadLocalState(token: token),
+            canvasService: DistributedStateMachineClient(
+                initialState: [],
+                reduce: reduceCanvas(state:action:),
+                connection: connection,
+                localState: loadLocalState(token: token),
                 persistState: { localState in
                     saveLocalState(localState, token: token)
                 }
@@ -108,8 +119,8 @@ class AuthenticationService {
     }
 
     func logout(reason: String? = nil) {
-        canvasClient?.disconnect()
-        canvasClient = nil
+        canvasConnection?.disconnect()
+        canvasConnection = nil
         TokenStore.clear()
         state = .unauthenticated(reason: reason)
     }

@@ -120,78 +120,67 @@ struct Placement: Codable, Equatable {
     }
 }
 
-enum Action {
+enum CanvasAction: Codable {
     case clear
     case remove(placementId: String)
     case upsert(placement: Placement)
-}
-
-struct SequencedAction: Codable {
-    let action: Action
-    let deviceSequenceNumber: Int
 
     private enum CodingKeys: String, CodingKey {
-        case action
-        case deviceSequenceNumber
-    }
-
-    private enum ActionCodingKeys: String, CodingKey {
         case type
         case placement
         case placementId
     }
 
-    init(action: Action, deviceSequenceNumber: Int) {
-        self.action = action
-        self.deviceSequenceNumber = deviceSequenceNumber
-    }
-
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let actionContainer = try container.nestedContainer(
-            keyedBy: ActionCodingKeys.self,
-            forKey: .action
-        )
 
-        let type = try actionContainer.decode(String.self, forKey: .type)
+        let type = try container.decode(String.self, forKey: .type)
         switch type {
         case "upsert":
-            let placement = try actionContainer.decode(Placement.self, forKey: .placement)
-            self.action = .upsert(placement: placement)
+            let placement = try container.decode(Placement.self, forKey: .placement)
+            self = .upsert(placement: placement)
         case "remove":
-            let placementId = try actionContainer.decode(String.self, forKey: .placementId)
-            self.action = .remove(placementId: placementId)
+            let placementId = try container.decode(String.self, forKey: .placementId)
+            self = .remove(placementId: placementId)
         case "clear":
-            self.action = .clear
+            self = .clear
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
-                in: actionContainer,
+                in: container,
                 debugDescription: "Unknown action type: \(type)"
             )
         }
-
-        self.deviceSequenceNumber = try container.decode(Int.self, forKey: .deviceSequenceNumber)
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        var actionContainer = container.nestedContainer(
-            keyedBy: ActionCodingKeys.self,
-            forKey: .action
-        )
 
-        switch action {
+        switch self {
         case .upsert(let placement):
-            try actionContainer.encode("upsert", forKey: .type)
-            try actionContainer.encode(placement, forKey: .placement)
+            try container.encode("upsert", forKey: .type)
+            try container.encode(placement, forKey: .placement)
         case .remove(let placementId):
-            try actionContainer.encode("remove", forKey: .type)
-            try actionContainer.encode(placementId, forKey: .placementId)
+            try container.encode("remove", forKey: .type)
+            try container.encode(placementId, forKey: .placementId)
         case .clear:
-            try actionContainer.encode("clear", forKey: .type)
+            try container.encode("clear", forKey: .type)
         }
+    }
+}
 
-        try container.encode(deviceSequenceNumber, forKey: .deviceSequenceNumber)
+func reduceCanvas(state: [Placement], action: CanvasAction) -> [Placement] {
+    switch action {
+    case .clear:
+        return []
+    case .remove(let placementId):
+        return state.filter { placement in
+            placement.id != placementId
+        }
+    case .upsert(let newPlacement):
+        // an upserted placement moves to the top of the z-order
+        return state.filter { placement in
+            placement.id != newPlacement.id
+        } + [newPlacement]
     }
 }
