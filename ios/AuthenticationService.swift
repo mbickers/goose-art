@@ -105,6 +105,13 @@ class AuthenticationService {
                 }
             )
         }
+        if let baseURL {
+            PushNotificationService.shared.sessionStarted(
+                baseURL: baseURL,
+                token: token
+            )
+        }
+
         canvasConnection = connection
         state = .authenticated(
             canvasService: DistributedStateMachineClient(
@@ -122,6 +129,7 @@ class AuthenticationService {
     func logout(reason: String? = nil) {
         canvasConnection?.disconnect()
         canvasConnection = nil
+        PushNotificationService.shared.sessionEnded()
         TokenStore.clear()
         state = .unauthenticated(reason: reason)
     }

@@ -3,6 +3,9 @@ import SwiftUI
 // pass nil to work offline, or URL(string: "http://localhost:8000") for a local server
 @main
 struct GooseArtApp: App {
+    @UIApplicationDelegateAdaptor(PushNotificationDelegate.self)
+    private var pushNotificationDelegate
+
     @State private var authenticationService = AuthenticationService(
         baseURL: URL(string: "https://goose-art.maxbickers.com")
     )

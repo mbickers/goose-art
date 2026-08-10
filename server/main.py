@@ -17,7 +17,13 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.responses import Response
+from pydantic import BaseModel, Field
 
+from canvas_notifications import (
+    PlacementNotification,
+    placed_emojis,
+    placement_coalescer,
+)
 from canvas_types import (
     Action,
     Placement,
@@ -30,6 +36,7 @@ from distributed_state_machine import (
     deserialize_client_message,
     serialize_server_message,
 )
+from notifications import apns_client, device_token_registry
 
 type CanvasServer = DistributedStateMachineServer[list[Placement], Action]
 
@@ -57,6 +64,8 @@ async def clear_canvases_daily():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if apns_client() is None:
+        print("push notifications disabled: no apns_config.json")
     clear_task = asyncio.create_task(clear_canvases_daily())
     yield
     clear_task.cancel()
@@ -110,6 +119,18 @@ def authenticated_user_id(authorization: str | None) -> str | None:
     return user_ids[token]
 
 
+# derived per connection rather than stored, because static data never changes and the
+# number of users sharing a canvas is small
+def other_user_ids_sharing_canvas(user_id: str) -> frozenset[str]:
+    canvases = static_data().canvases_by_user_id
+    canvas = canvases[user_id]
+    return frozenset(
+        other_user_id
+        for other_user_id, other_canvas in canvases.items()
+        if other_canvas is canvas and other_user_id != user_id
+    )
+
+
 @app.websocket("/canvas")
 async def canvas_handler(
     websocket: WebSocket,
@@ -140,6 +161,11 @@ async def canvas_handler(
         )
         asyncio.create_task(websocket.send_json(msg))
 
+    notification = PlacementNotification(
+        placer_user_id=user_id,
+        recipient_user_ids=other_user_ids_sharing_canvas(user_id),
+    )
+
     unsubscribe = canvas.subscribe(canvas_subscriber, call_on_subscribe=True)
     try:
         while True:
@@ -147,11 +173,32 @@ async def canvas_handler(
             actions = deserialize_client_message(
                 data, deserialize_action=action_from_json
             )
-            canvas.process_actions(actions, device_id=device_id)
+            existing_placement_ids = {placement.id for placement in canvas.state}
+            applied = canvas.process_actions(actions, device_id=device_id)
+
+            if notification.recipient_user_ids:
+                for emoji in placed_emojis(
+                    actions=applied, existing_placement_ids=existing_placement_ids
+                ):
+                    placement_coalescer().add(key=notification, event=emoji)
     except WebSocketDisconnect:
         pass
     finally:
         unsubscribe()
+
+
+class DeviceTokenBody(BaseModel):
+    device_token: str = Field(alias="deviceToken")
+
+
+@app.post("/deviceToken")
+async def register_device_token(
+    body: DeviceTokenBody, authorization: Annotated[str | None, Header()] = None
+):
+    user_id = authenticated_user_id(authorization)
+    if user_id is None:
+        raise HTTPException(status_code=401)
+    device_token_registry().register(user_id=user_id, device_token=body.device_token)
 
 
 @app.get("/login")
