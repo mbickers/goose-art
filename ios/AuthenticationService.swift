@@ -108,10 +108,10 @@ class AuthenticationService {
         canvasConnection = connection
         state = .authenticated(
             canvasService: DistributedStateMachineClient(
-                initialState: [],
+                localState: loadLocalState(token: token)
+                    ?? DistributedStateMachineLocalState(initialState: []),
                 reduce: reduceCanvas(state:action:),
                 connection: connection,
-                localState: loadLocalState(token: token),
                 persistState: { localState in
                     saveLocalState(localState, token: token)
                 }

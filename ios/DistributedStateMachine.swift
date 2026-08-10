@@ -20,6 +20,16 @@ struct DistributedStateMachineLocalState<State: Codable, Action: Codable>: Codab
     let unsyncedActions: [SequencedAction<Action>]
 }
 
+extension DistributedStateMachineLocalState {
+    init(initialState: State) {
+        self.init(
+            deviceSequenceNumber: 0,
+            confirmedState: initialState,
+            unsyncedActions: []
+        )
+    }
+}
+
 @Observable class DistributedStateMachineClient<State: Codable, Action: Codable> {
     private let connection: AuthenticatedWebSocket<ServerMessage<State>, ClientMessage<Action>>?
     private let reduce: (State, Action) -> State
@@ -28,22 +38,15 @@ struct DistributedStateMachineLocalState<State: Codable, Action: Codable>: Codab
     private var localState: DistributedStateMachineLocalState<State, Action>
 
     init(
-        initialState: State,
+        localState: DistributedStateMachineLocalState<State, Action>,
         reduce: @escaping (State, Action) -> State,
         connection: AuthenticatedWebSocket<ServerMessage<State>, ClientMessage<Action>>? = nil,
-        localState: DistributedStateMachineLocalState<State, Action>? = nil,
         persistState: ((DistributedStateMachineLocalState<State, Action>) -> Void)? = nil
     ) {
         self.connection = connection
         self.reduce = reduce
         self.persistState = persistState
-        self.localState =
-            localState
-            ?? DistributedStateMachineLocalState(
-                deviceSequenceNumber: 0,
-                confirmedState: initialState,
-                unsyncedActions: []
-            )
+        self.localState = localState
 
         if let message = connection?.mostRecentMessage {
             serverUpdate(

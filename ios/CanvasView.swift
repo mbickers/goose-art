@@ -439,7 +439,7 @@ struct CanvasView: View {
 #Preview {
     CanvasView(
         placementService: DistributedStateMachineClient(
-            initialState: [],
+            localState: DistributedStateMachineLocalState(initialState: []),
             reduce: reduceCanvas(state:action:)
         ),
         logout: nil
