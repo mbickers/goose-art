@@ -1,8 +1,11 @@
 import asyncio
 import json
+from contextlib import asynccontextmanager
+from datetime import datetime, time, timedelta
 from functools import cache
 from pathlib import Path
 from typing import Annotated, Any
+from zoneinfo import ZoneInfo
 
 from fastapi import (
     FastAPI,
@@ -17,14 +20,42 @@ from fastapi.responses import Response
 from canvas_service import CanvasService
 from canvas_types import Placement, SequencedAction
 
-app = FastAPI()
-
-
 canvas = CanvasService()
 users: dict[str, CanvasService] = {
     "max": canvas,
     "brian": canvas,
 }
+
+clear_timezone = ZoneInfo("America/New_York")
+clear_time = time(hour=2)
+
+
+def seconds_until_next_clear(now: datetime) -> float:
+    next_clear = datetime.combine(now.date(), clear_time, tzinfo=clear_timezone)
+    if next_clear <= now:
+        next_clear = datetime.combine(
+            now.date() + timedelta(days=1), clear_time, tzinfo=clear_timezone
+        )
+    return (next_clear - now).total_seconds()
+
+
+async def clear_canvases_daily():
+    while True:
+        await asyncio.sleep(seconds_until_next_clear(datetime.now(clear_timezone)))
+        # set() because users share canvases, and clearing one twice would broadcast twice
+        for canvas in set(users.values()):
+            canvas.clear()
+        print(f"cleared canvases at {datetime.now(clear_timezone)}")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    clear_task = asyncio.create_task(clear_canvases_daily())
+    yield
+    clear_task.cancel()
+
+
+app = FastAPI(lifespan=lifespan)
 
 # untracked so that tokens stay out of the repo, and so that deploy.sh (which only
 # rsyncs git-tracked files) leaves the deployed copy alone
