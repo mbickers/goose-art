@@ -21,9 +21,9 @@ from pydantic import BaseModel, Field
 
 from apple_notifications import apns_client, device_token_registry
 from canvas_notifications import (
-    PlacementNotification,
+    PlacementNotificationKey,
+    notification_coalescer,
     placed_emojis,
-    placement_coalescer,
 )
 from canvas_types import (
     Action,
@@ -161,10 +161,12 @@ async def canvas_handler(
         )
         asyncio.create_task(websocket.send_json(msg))
 
-    notification = PlacementNotification(
-        placer_user_id=user_id,
-        recipient_user_ids=other_user_ids_sharing_canvas(user_id),
-    )
+    notification_keys = [
+        PlacementNotificationKey(
+            placer_user_id=user_id, recipient_user_id=recipient_user_id
+        )
+        for recipient_user_id in sorted(other_user_ids_sharing_canvas(user_id))
+    ]
 
     unsubscribe = canvas.subscribe(canvas_subscriber, call_on_subscribe=True)
     try:
@@ -178,9 +180,9 @@ async def canvas_handler(
             before = canvas.state
             canvas.process_actions(actions, device_id=device_id)
 
-            if notification.recipient_user_ids:
-                for emoji in placed_emojis(before=before, after=canvas.state):
-                    placement_coalescer().add(key=notification, event=emoji)
+            for emoji in placed_emojis(before=before, after=canvas.state):
+                for key in notification_keys:
+                    notification_coalescer().add(key=key, event=emoji)
     except WebSocketDisconnect:
         pass
     finally:

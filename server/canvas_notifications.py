@@ -12,10 +12,11 @@ from canvas_types import Placement
 placement_coalesce_delay = 15.0
 
 
+# one key per pair, so each recipient batches on their own window rather than sharing one
 @dataclass(kw_only=True, frozen=True)
-class PlacementNotification:
+class PlacementNotificationKey:
     placer_user_id: str
-    recipient_user_ids: frozenset[str]
+    recipient_user_id: str
 
 
 # comparing the canvas before and after rather than reading the actions: an emoji that was
@@ -61,12 +62,13 @@ class Coalescer[Key, Event]:
         await self.flush(key=key, events=events)
 
 
-async def flush_placements(*, key: PlacementNotification, events: list[str]):
-    body = f"{key.placer_user_id} placed {''.join(events)}"
-    for recipient_user_id in sorted(key.recipient_user_ids):
-        await send_push(user_id=recipient_user_id, body=body)
+async def flush_placements(*, key: PlacementNotificationKey, events: list[str]):
+    await send_push(
+        user_id=key.recipient_user_id,
+        body=f"{key.placer_user_id} placed {''.join(events)}",
+    )
 
 
 @cache
-def placement_coalescer() -> Coalescer[PlacementNotification, str]:
+def notification_coalescer() -> Coalescer[PlacementNotificationKey, str]:
     return Coalescer(delay=placement_coalesce_delay, flush=flush_placements)
