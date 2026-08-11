@@ -37,6 +37,10 @@ private func lastEmojiInString(_ string: String) -> Emoji? {
     return string.compactMap { Emoji($0) }.last
 }
 
+// one feel for a placement settling into place, whether it arrives (a transition) or
+// moves (keyframes), which SwiftUI has no single mechanism for
+private let placementSpring = Spring(duration: 0.3, bounce: 0.45)
+
 struct CanvasView: View {
     let placementService: DistributedStateMachineClient<[Placement], CanvasAction>
     let userId: String
@@ -286,7 +290,6 @@ struct CanvasView: View {
                             let placementIsBeingDragged =
                                 activePlacementState?.placement.id == placement.id
                             placementGlyph(placement, canvasFrame: canvasFrame)
-                                .contentShape(Rectangle())
                                 .gesture(
                                     makePickupGesture(placement: placement)
                                 )
@@ -311,11 +314,10 @@ struct CanvasView: View {
                             .gesture(secondTouchGesture)
                     }
                 }
-                // keyed on ids so only placements coming and going animate: a dragged
-                // placement's position has to stay glued to the finger
+                // animate (only) new placements
                 .animation(
-                    .spring(response: 0.3, dampingFraction: 0.55),
-                    value: placementService.state.map(\.id)
+                    .spring(placementSpring),
+                    value: Set(placementService.state.map(\.id))
                 )
                 .onGeometryChange(
                     for: CGRect.self,
