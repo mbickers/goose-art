@@ -34,16 +34,22 @@ extension DistributedStateMachineLocalState {
     private let connection: AuthenticatedWebSocket<ServerMessage<State>, ClientMessage<Action>>?
     private let reduce: (State, Action) -> State
     private let persistState: ((DistributedStateMachineLocalState<State, Action>) -> Void)?
-    private let onServerUpdate: ((_ previous: State, _ current: State) -> Void)?
+    // the first update carries the state the session opened with rather than a change to
+    // it, which a subscriber that reacts to arrivals wants to tell apart
+    private let onServerUpdate:
+        ((_ previous: State, _ current: State, _ isFirstUpdateOfSession: Bool) -> Void)?
 
     private var localState: DistributedStateMachineLocalState<State, Action>
+    @ObservationIgnored private var receivedServerUpdate = false
 
     init(
         localState: DistributedStateMachineLocalState<State, Action>,
         reduce: @escaping (State, Action) -> State,
         connection: AuthenticatedWebSocket<ServerMessage<State>, ClientMessage<Action>>? = nil,
         persistState: ((DistributedStateMachineLocalState<State, Action>) -> Void)? = nil,
-        onServerUpdate: ((_ previous: State, _ current: State) -> Void)? = nil
+        onServerUpdate: (
+            (_ previous: State, _ current: State, _ isFirstUpdateOfSession: Bool) -> Void
+        )? = nil
     ) {
         self.connection = connection
         self.reduce = reduce
@@ -51,24 +57,27 @@ extension DistributedStateMachineLocalState {
         self.onServerUpdate = onServerUpdate
         self.localState = localState
 
+        // a connection that already has a message hydrates from it here; one that doesn't
+        // — every fresh login — hydrates from the first message it delivers instead. both
+        // are the session's first update, and neither is news
         if let message = connection?.mostRecentMessage {
-            serverUpdate(
-                greatestSeenDeviceSequenceNumber: message.greatestSeenDeviceSequenceNumber,
-                state: message.state
-            )
+            applyServerMessage(message)
         }
-        // onServerUpdate is reported from here rather than from serverUpdate itself, so
-        // that the hydration above doesn't announce the entire state as a change
         connection?.subscribe { [weak self] message in
-            guard let self else { return }
-            let previousState = state
-            serverUpdate(
-                greatestSeenDeviceSequenceNumber: message.greatestSeenDeviceSequenceNumber,
-                state: message.state
-            )
-            onServerUpdate?(previousState, state)
+            self?.applyServerMessage(message)
         }
         pushUnsyncedActions()
+    }
+
+    private func applyServerMessage(_ message: ServerMessage<State>) {
+        let previousState = state
+        let isFirstUpdateOfSession = !receivedServerUpdate
+        receivedServerUpdate = true
+        serverUpdate(
+            greatestSeenDeviceSequenceNumber: message.greatestSeenDeviceSequenceNumber,
+            state: message.state
+        )
+        onServerUpdate?(previousState, state, isFirstUpdateOfSession)
     }
 
     private func update(localState: DistributedStateMachineLocalState<State, Action>) {

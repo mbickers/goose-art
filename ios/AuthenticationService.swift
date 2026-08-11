@@ -132,7 +132,10 @@ class AuthenticationService {
                 // state immediately, so by the time the server echoes one back it is in
                 // both the before and after state. a placement id that is new here was
                 // made on some other device
-                onServerUpdate: { previousPlacements, placements in
+                onServerUpdate: { previousPlacements, placements, isFirstUpdateOfSession in
+                    // what was already on the canvas when the session opened isn't an
+                    // arrival, so logging in to a canvas full of emoji stays quiet
+                    guard !isFirstUpdateOfSession else { return }
                     let previousIds = Set(previousPlacements.map(\.id))
                     if placements.contains(where: { placement in
                         !previousIds.contains(placement.id)
