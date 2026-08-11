@@ -98,6 +98,7 @@ struct CanvasView: View {
     @State private var activePlacementState: ActivePlacementState? = nil
     @State private var canvasFrame: CGRect? = nil
     @State private var showingSettings = false
+    @AppStorage(MessageSound.enabledDefaultsKey) private var soundEffectsEnabled = true
 
     private func toPlacementCoordinates(globalPoint: CGPoint) -> CGPoint? {
         guard let canvasFrame else { return nil }
@@ -438,6 +439,9 @@ struct CanvasView: View {
         .confirmationDialog("Settings", isPresented: $showingSettings) {
             Button("Clear", role: .destructive) {
                 placementService.apply(.clear)
+            }
+            Button(soundEffectsEnabled ? "Turn off sound effects" : "Turn on sound effects") {
+                soundEffectsEnabled.toggle()
             }
             Button("Log out \(userId)", role: .destructive) {
                 logout?()
