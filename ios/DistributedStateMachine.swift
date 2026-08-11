@@ -113,7 +113,7 @@ extension DistributedStateMachineLocalState {
     // the server holds state in memory, so a restart pushes the initial state and a
     // sequence number back at 0. that is a normal update, not an error: resetting the
     // state is fine, crashing or wedging the connection over it is not
-    func serverUpdate(
+    private func serverUpdate(
         greatestSeenDeviceSequenceNumber: Int,
         state: State
     ) {

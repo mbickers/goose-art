@@ -196,7 +196,6 @@ async def login(authorization: Annotated[str | None, Header()] = None):
     return {"userId": user_id}
 
 
-# TODO: remove
 @app.get("/inspect")
 async def inspect_canvas(authorization: Annotated[str | None, Header()] = None):
     user_id = authenticated_user_id(authorization)

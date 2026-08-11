@@ -1,14 +1,12 @@
 import SwiftUI
 
-// TODO: make public/private consistent
-
-struct SecondTouchState {
+private struct SecondTouchState {
     let initialOffset: CGPoint
     let baseScale: CGFloat
     let baseRotation: CGFloat  // radians
 }
 
-struct ActivePlacementState {
+private struct ActivePlacementState {
     enum Source {
         case palette
         case canvas
@@ -35,7 +33,7 @@ struct ActivePlacementState {
     }
 }
 
-func lastEmojiInString(_ string: String) -> Emoji? {
+private func lastEmojiInString(_ string: String) -> Emoji? {
     return string.compactMap { Emoji($0) }.last
 }
 
@@ -54,9 +52,11 @@ struct CanvasView: View {
     @State private var showingSettings = false
     @AppStorage(MessageSound.enabledDefaultsKey) private var soundEffectsEnabled = true
 
-    private func toPlacementCoordinates(globalPoint: CGPoint) -> CGPoint? {
+    // two coordinate systems meet here: screen points, which is what gestures report in
+    // the .global space, and canvas points, the unit square a Placement is stored in
+    private func toCanvasPoint(screenPoint: CGPoint) -> CGPoint? {
         guard let canvasFrame else { return nil }
-        return (globalPoint - canvasFrame.origin).safeDivide(
+        return (screenPoint - canvasFrame.origin).safeDivide(
             canvasFrame.width
         )
     }
@@ -70,23 +70,20 @@ struct CanvasView: View {
             coordinateSpace: .global
         ).onChanged {
             value in
-            // TODO: figure out better names for the coordinate systems
             guard
-                let placementPosition = toPlacementCoordinates(
-                    globalPoint: value.location
-                )
+                let canvasPoint = toCanvasPoint(screenPoint: value.location)
             else { return }
             let activePlacementState =
                 activePlacementState
                 ?? ActivePlacementState(
-                    placement: makePlacement(placementPosition),
+                    placement: makePlacement(canvasPoint),
                     secondTouchState: nil,
                     source: source
                 )
             self.activePlacementState = activePlacementState.with(
                 placement:
                     activePlacementState.placement.with(
-                        position: placementPosition
+                        position: canvasPoint
                     )
             )
         }.onEnded { _ in
@@ -101,10 +98,10 @@ struct CanvasView: View {
     private func makePaletteDragGesture(emoji: Emoji) -> some Gesture {
         return makeDragGesture(
             source: .palette,
-            makePlacement: { placementPosition in
+            makePlacement: { canvasPoint in
                 Placement(
                     emoji: emoji,
-                    position: placementPosition,
+                    position: canvasPoint,
                     scale: 0.3,
                     rotation: 0,
                     isMirrored: false,
@@ -143,11 +140,11 @@ struct CanvasView: View {
         )
         .onChanged { value in
             guard let dragState = activePlacementState,
-                let startLocationCanvasSpace = toPlacementCoordinates(
-                    globalPoint: value.startLocation
+                let startCanvasPoint = toCanvasPoint(
+                    screenPoint: value.startLocation
                 ),
-                let currentLocationCanvasSpace = toPlacementCoordinates(
-                    globalPoint: value.location
+                let currentCanvasPoint = toCanvasPoint(
+                    screenPoint: value.location
                 )
             else {
                 return
@@ -158,7 +155,7 @@ struct CanvasView: View {
             else {
                 self.activePlacementState = dragState.with(
                     secondTouchState: SecondTouchState(
-                        initialOffset: startLocationCanvasSpace
+                        initialOffset: startCanvasPoint
                             - dragState.placement.position,
                         baseScale: dragState.placement.scale,
                         baseRotation: dragState.placement.rotation
@@ -168,8 +165,11 @@ struct CanvasView: View {
             }
 
             let currentOffset =
-                currentLocationCanvasSpace - dragState.placement.position
+                currentCanvasPoint - dragState.placement.position
 
+            // how far the second finger has to travel to scale the placement, and the
+            // floor on where it started from, so that a second touch landing on the
+            // placement itself doesn't divide by ~0
             let clampedInitialOffsetNorm = max(
                 secondTouchState.initialOffset
                     .norm(),
@@ -179,8 +179,7 @@ struct CanvasView: View {
                 (secondTouchState.baseScale
                 * 1.5 * currentOffset.norm()
                 / clampedInitialOffsetNorm).clamped(
-                    // TODO: factor out constants
-                    to: 0.05...1
+                    to: Placement.scaleRange
                 )
 
             let initialAngle = secondTouchState.initialOffset

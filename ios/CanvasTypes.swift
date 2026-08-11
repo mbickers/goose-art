@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 
 struct Emoji: Equatable, Codable, Hashable {
-    let value: Character
+    private let value: Character
 
     init?(_ value: Character) {
         guard value.isEmoji else { return nil }
@@ -38,6 +38,11 @@ extension Character {
 }
 
 struct Placement: Codable, Equatable {
+    // a placement lives in canvas coordinates: the unit square, with 1 the canvas's
+    // side, so the same canvas renders identically at any size. scale is a fraction
+    // of that side too
+    static let scaleRange: ClosedRange<CGFloat> = 0.05...1
+
     let emoji: Emoji
     let position: CGPoint
     let scale: CGFloat

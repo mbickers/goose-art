@@ -36,7 +36,7 @@ struct RoundedBorder: ViewModifier {
     }
 }
 
-let buttonBorder = RoundedBorder(cornerRadius: 20, lineWidth: 6)
+private let buttonBorder = RoundedBorder(cornerRadius: 20, lineWidth: 6)
 
 // the border sits above the dimming so it stays solid while the fill fades
 struct ButtonSurface: ViewModifier {
@@ -72,9 +72,9 @@ struct CustomButton: View {
         case progress
     }
 
-    let content: Content
-    let action: () -> Void
-    let enabled: Bool
+    private let content: Content
+    private let action: () -> Void
+    private let enabled: Bool
 
     init(content: Content, enabled: Bool = true, action: @escaping () -> Void) {
         self.content = content

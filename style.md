@@ -72,6 +72,43 @@ class Placement: ...
 A single argument the function name already describes may stay positional:
 `Placement.from_json(data)`.
 
+## Only name a constant when the name earns its place
+
+A literal used once, next to the code that explains it, is already clear. Lifting
+it to a named constant costs a reader a jump to a definition somewhere else in
+the file — or another file — to learn a number they could have read in place. A
+comment at the use site says more than a name ever can.
+
+```swift
+// bad — two names to look up, both used exactly once, neither closer to the truth
+private let scaleSensitivity: CGFloat = 1.5
+private let minimumInitialOffsetNorm: CGFloat = 0.01
+...
+let clampedInitialOffsetNorm = max(secondTouchState.initialOffset.norm(), minimumInitialOffsetNorm)
+let clampedScale = secondTouchState.baseScale * scaleSensitivity * ...
+
+// good — the comment explains what the names couldn't
+// how far the second finger has to travel to scale the placement, and the floor on
+// where it started from, so that a second touch landing on the placement itself
+// doesn't divide by ~0
+let clampedInitialOffsetNorm = max(secondTouchState.initialOffset.norm(), 0.01)
+let clampedScale = secondTouchState.baseScale * 1.5 * ...
+```
+
+Name a constant when it is a fact about the domain rather than a tuning knob in
+the code that happens to use it — when it belongs to the type, and would still be
+true if the UI using it were rewritten. Those live with the type they describe:
+
+```swift
+// good — a placement is invalid outside this range no matter who is clamping it
+struct Placement {
+    static let scaleRange: ClosedRange<CGFloat> = 0.05...1
+}
+```
+
+The other reason to name one is **more than one use**: two call sites that must
+agree need a single definition, or they'll drift apart.
+
 ## Avoid ViewBuilder-style trailing closures for our own functions
 
 Trailing-closure syntax hides the parameter label, which is exactly the

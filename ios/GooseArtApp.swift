@@ -40,7 +40,7 @@ struct GooseArtApp: App {
     }
 }
 
-class PushNotificationDelegate: NSObject, UIApplicationDelegate,
+private class PushNotificationDelegate: NSObject, UIApplicationDelegate,
     UNUserNotificationCenterDelegate
 {
     var receivedDeviceNotificationToken: ((String) -> Void)?
