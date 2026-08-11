@@ -1,5 +1,6 @@
 import CryptoKit
 import SwiftUI
+import UserNotifications
 
 enum AuthenticationState {
     case authenticated(canvasService: DistributedStateMachineClient<[Placement], CanvasAction>)
@@ -105,6 +106,8 @@ class AuthenticationService {
                 }
             )
         }
+        Task { await requestNotificationAuthorization() }
+
         canvasConnection = connection
         state = .authenticated(
             canvasService: DistributedStateMachineClient(
@@ -137,4 +140,43 @@ class AuthenticationService {
         TokenStore.clear()
         state = .unauthenticated(reason: reason)
     }
+
+    // asking again once the user has answered returns that answer without prompting them
+    // a second time, so this can run on every session
+    private func requestNotificationAuthorization() async {
+        guard baseURL != nil else { return }
+
+        let granted =
+            (try? await UNUserNotificationCenter.current().requestAuthorization(
+                options: [.alert, .sound, .badge]
+            )) ?? false
+        guard granted else { return }
+        UIApplication.shared.registerForRemoteNotifications()
+    }
+
+    // reads the token back rather than holding it, so that a token cleared by logout
+    // stops this from registering a device against the user who just left
+    func receivedDeviceNotificationToken(_ deviceNotificationToken: String) {
+        guard let baseURL, let token = TokenStore.load() else { return }
+
+        var request = URLRequest(
+            url: baseURL.appendingPathComponent("deviceNotificationToken")
+        )
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try! JSONEncoder().encode(
+            DeviceNotificationTokenBody(
+                deviceNotificationToken: deviceNotificationToken
+            )
+        )
+
+        Task {
+            _ = try? await URLSession.shared.data(for: request)
+        }
+    }
+}
+
+private struct DeviceNotificationTokenBody: Encodable {
+    let deviceNotificationToken: String
 }

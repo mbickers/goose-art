@@ -17,7 +17,14 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.responses import Response
+from pydantic import BaseModel, Field
 
+from apple_notifications import apns_client, device_notification_token_registry
+from canvas_notifications import (
+    PlacementNotificationKey,
+    notification_coalescer,
+    placed_emojis,
+)
 from canvas_types import (
     Action,
     Placement,
@@ -57,6 +64,8 @@ async def clear_canvases_daily():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if apns_client() is None:
+        print("push notifications disabled: no apns_config.json")
     clear_task = asyncio.create_task(clear_canvases_daily())
     yield
     clear_task.cancel()
@@ -110,6 +119,18 @@ def authenticated_user_id(authorization: str | None) -> str | None:
     return user_ids[token]
 
 
+# derived per connection rather than stored, because static data never changes and the
+# number of users sharing a canvas is small
+def other_user_ids_sharing_canvas(user_id: str) -> frozenset[str]:
+    canvases = static_data().canvases_by_user_id
+    canvas = canvases[user_id]
+    return frozenset(
+        other_user_id
+        for other_user_id, other_canvas in canvases.items()
+        if other_canvas is canvas and other_user_id != user_id
+    )
+
+
 @app.websocket("/canvas")
 async def canvas_handler(
     websocket: WebSocket,
@@ -140,6 +161,13 @@ async def canvas_handler(
         )
         asyncio.create_task(websocket.send_json(msg))
 
+    notification_keys = [
+        PlacementNotificationKey(
+            placer_user_id=user_id, recipient_user_id=recipient_user_id
+        )
+        for recipient_user_id in sorted(other_user_ids_sharing_canvas(user_id))
+    ]
+
     unsubscribe = canvas.subscribe(canvas_subscriber, call_on_subscribe=True)
     try:
         while True:
@@ -147,11 +175,35 @@ async def canvas_handler(
             actions = deserialize_client_message(
                 data, deserialize_action=action_from_json
             )
+            # safe to hold across the call because reducing replaces the state rather
+            # than mutating it
+            before = canvas.state
             canvas.process_actions(actions, device_id=device_id)
+
+            for emoji in placed_emojis(before=before, after=canvas.state):
+                for key in notification_keys:
+                    notification_coalescer().add(key=key, event=emoji)
     except WebSocketDisconnect:
         pass
     finally:
         unsubscribe()
+
+
+class DeviceNotificationTokenBody(BaseModel):
+    device_notification_token: str = Field(alias="deviceNotificationToken")
+
+
+@app.post("/deviceNotificationToken")
+async def register_device_notification_token(
+    body: DeviceNotificationTokenBody,
+    authorization: Annotated[str | None, Header()] = None,
+):
+    user_id = authenticated_user_id(authorization)
+    if user_id is None:
+        raise HTTPException(status_code=401)
+    device_notification_token_registry().register(
+        user_id=user_id, device_notification_token=body.device_notification_token
+    )
 
 
 @app.get("/login")
