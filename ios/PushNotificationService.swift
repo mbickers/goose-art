@@ -67,6 +67,9 @@ class PushNotificationDelegate: NSObject, UIApplicationDelegate,
         return true
     }
 
+    // called in response to the registerForRemoteNotifications() that starting a session
+    // asks for, and again if iOS ever changes the token. never spontaneously at launch,
+    // so a session is always waiting by the time this arrives
     func application(
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
