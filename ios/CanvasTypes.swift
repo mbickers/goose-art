@@ -53,8 +53,7 @@ struct Placement: Codable, Equatable {
         position: CGPoint? = nil,
         scale: CGFloat? = nil,
         rotation: CGFloat? = nil,
-        isMirrored: Bool? = nil,
-        id: String? = nil,
+        isMirrored: Bool? = nil
     ) -> Placement {
         return Placement(
             emoji: emoji,
@@ -62,57 +61,42 @@ struct Placement: Codable, Equatable {
             scale: scale ?? self.scale,
             rotation: rotation ?? self.rotation,
             isMirrored: isMirrored ?? self.isMirrored,
-            id: id ?? self.id
+            id: id
         )
     }
+}
 
-    enum CodingKeys: String, CodingKey {
-        case emoji
-        case position
-        case scale
-        case rotation
-        case isMirrored
-        case id
+// CGPoint encodes itself as a bare [x, y] array, but the server and every canvas already
+// stored on a device speak {"x": …, "y": …}. Position is the one field that can't be
+// synthesized, and living in an extension keeps the memberwise init synthesized.
+extension Placement {
+    private struct Coordinates: Codable {
+        let x: CGFloat
+        let y: CGFloat
     }
 
-    init(
-        emoji: Emoji, position: CGPoint, scale: CGFloat, rotation: CGFloat, isMirrored: Bool,
-        id: String
-    ) {
-        self.emoji = emoji
-        self.position = position
-        self.scale = scale
-        self.rotation = rotation
-        self.isMirrored = isMirrored
-        self.id = id
+    private enum CodingKeys: String, CodingKey {
+        case emoji, position, scale, rotation, isMirrored, id
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-
-        self.emoji = try container.decode(Emoji.self, forKey: .emoji)
-
-        let positionDict = try container.decode([String: CGFloat].self, forKey: .position)
-        guard let x = positionDict["x"], let y = positionDict["y"] else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .position,
-                in: container,
-                debugDescription: "Position must have x and y values"
-            )
-        }
-        self.position = CGPoint(x: x, y: y)
-
-        self.scale = try container.decode(CGFloat.self, forKey: .scale)
-        self.rotation = try container.decode(CGFloat.self, forKey: .rotation)
-        self.isMirrored = try container.decode(Bool.self, forKey: .isMirrored)
-        self.id = try container.decode(String.self, forKey: .id)
+        let coordinates = try container.decode(Coordinates.self, forKey: .position)
+        self.init(
+            emoji: try container.decode(Emoji.self, forKey: .emoji),
+            position: CGPoint(x: coordinates.x, y: coordinates.y),
+            scale: try container.decode(CGFloat.self, forKey: .scale),
+            rotation: try container.decode(CGFloat.self, forKey: .rotation),
+            isMirrored: try container.decode(Bool.self, forKey: .isMirrored),
+            id: try container.decode(String.self, forKey: .id)
+        )
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
 
         try container.encode(emoji, forKey: .emoji)
-        try container.encode(["x": position.x, "y": position.y], forKey: .position)
+        try container.encode(Coordinates(x: position.x, y: position.y), forKey: .position)
         try container.encode(scale, forKey: .scale)
         try container.encode(rotation, forKey: .rotation)
         try container.encode(isMirrored, forKey: .isMirrored)

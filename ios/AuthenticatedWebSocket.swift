@@ -1,20 +1,16 @@
 import Foundation
 
 // Maintains a bearer-token-authenticated websocket, reconnecting after transient
-// failures. Generic over the message types, with two stipulations on the protocol
-// it carries:
-// - Outbound: holds a single latest message, replacing any unsent one, and re-sends
-//   it on every reconnect. Messages must be complete and idempotent, not deltas.
-// - Inbound: only the most recent message is cached for late subscribers, so each
-//   message must be a self-contained snapshot.
+// failures. Generic over the message types, with one stipulation on the protocol
+// it carries: Outbound holds a single latest message, replacing any unsent one, and
+// re-sends it on every reconnect, so messages must be complete and idempotent rather
+// than deltas.
 class AuthenticatedWebSocket<Inbound: Decodable, Outbound: Encodable> {
     private let request: URLRequest
     private let reconnectDelay: TimeInterval = 1.0
-    private let onError: ((String) -> Void)?
     private let onAuthenticationFailed: (() -> Void)?
 
     private var subscribers: [(Inbound) -> Void] = []
-    private(set) var mostRecentMessage: Inbound?
 
     func subscribe(_ callback: @escaping (Inbound) -> Void) {
         subscribers.append(callback)
@@ -29,7 +25,6 @@ class AuthenticatedWebSocket<Inbound: Decodable, Outbound: Encodable> {
         path: String,
         queryItems: [URLQueryItem] = [],
         token: String,
-        onError: ((String) -> Void)? = nil,
         onAuthenticationFailed: (() -> Void)? = nil
     ) {
         var components = URLComponents(
@@ -49,7 +44,6 @@ class AuthenticatedWebSocket<Inbound: Decodable, Outbound: Encodable> {
         )
         self.request = request
 
-        self.onError = onError
         self.onAuthenticationFailed = onAuthenticationFailed
         connectionTask = Task { await connect() }
     }
@@ -84,9 +78,7 @@ class AuthenticatedWebSocket<Inbound: Decodable, Outbound: Encodable> {
                     onAuthenticationFailed?()
                     return
                 }
-                onError?(
-                    "Error receiving message: \(error.localizedDescription)"
-                )
+                print("error receiving message: \(error.localizedDescription)")
                 // try? because sleep throws when the task is cancelled mid-wait
                 try? await Task.sleep(for: .seconds(reconnectDelay))
             }
@@ -97,9 +89,7 @@ class AuthenticatedWebSocket<Inbound: Decodable, Outbound: Encodable> {
         switch message {
         case .string(let s):
             guard let data = s.data(using: .utf8) else {
-                onError?(
-                    "Error converting message string to data: invalid UTF-8"
-                )
+                print("error converting message string to data: invalid UTF-8")
                 return
             }
             do {
@@ -107,23 +97,16 @@ class AuthenticatedWebSocket<Inbound: Decodable, Outbound: Encodable> {
                     Inbound.self,
                     from: data
                 )
-                mostRecentMessage = inbound
                 for subscriber in subscribers {
                     subscriber(inbound)
                 }
             } catch {
-                onError?(
-                    "Error decoding message: \(error.localizedDescription)"
-                )
+                print("error decoding message: \(error.localizedDescription)")
             }
         case .data:
-            onError?(
-                "Error handling message: expected string message, received data message"
-            )
+            print("error handling message: expected string message, received data message")
         @unknown default:
-            onError?(
-                "Error handling message: expected string message, received unknown message type"
-            )
+            print("error handling message: expected string message, received unknown type")
         }
     }
 
@@ -143,7 +126,7 @@ class AuthenticatedWebSocket<Inbound: Decodable, Outbound: Encodable> {
                 try await socket.send(.string(queuedPayload))
             } catch {
                 self.socket = nil
-                onError?("Error sending message: \(error.localizedDescription)")
+                print("error sending message: \(error.localizedDescription)")
             }
         }
     }

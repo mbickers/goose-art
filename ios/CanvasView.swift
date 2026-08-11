@@ -18,16 +18,6 @@ struct ActivePlacementState {
     let secondTouchState: SecondTouchState?
     let source: Source
 
-    init(
-        placement: Placement,
-        secondTouchState: SecondTouchState?,
-        source: Source
-    ) {
-        self.placement = placement
-        self.secondTouchState = secondTouchState
-        self.source = source
-    }
-
     func with(placement: Placement) -> ActivePlacementState {
         return ActivePlacementState(
             placement: placement,
@@ -47,42 +37,6 @@ struct ActivePlacementState {
 
 func lastEmojiInString(_ string: String) -> Emoji? {
     return string.compactMap { Emoji($0) }.last
-}
-
-struct GeometryTracker: ViewModifier {
-    @Binding var binding: CGRect?
-
-    func body(content: Content) -> some View {
-        content
-            .overlay(
-                GeometryReader { geometry in
-                    EmptyView()
-                        .onAppear {
-                            binding = geometry.frame(in: .global)
-                        }
-                        .onChange(of: geometry.frame(in: .global)) {
-                            oldValue,
-                            newValue in
-                            binding = newValue
-                        }
-                }
-            )
-    }
-}
-
-struct Debug: View {
-    let description: String
-    let value: String
-
-    init<T>(_ description: String, _ value: T) {
-        self.description = description
-        self.value = String(describing: value)
-    }
-
-    var body: some View {
-        Text(verbatim: "\(description): \(value)")
-            .foregroundColor(.black)
-    }
 }
 
 struct CanvasView: View {
@@ -306,21 +260,15 @@ struct CanvasView: View {
 
     // positioning is left to the caller so that gestures can be attached before
     // .position, which otherwise expands to fill the whole canvas
-    @ViewBuilder private func placementGlyph(_ placement: Placement)
-        -> some View
-    {
-        if let canvasFrame = canvasFrame {
-            Text(placement.emoji.stringValue)
-                .font(.rounded(size: canvasFrame.height * placement.scale))
-                // the canvas proposes less width than the full-screen drag preview,
-                // so without this a large glyph gets a narrower frame in one than
-                // the other and .position centers them differently
-                .fixedSize()
-                .scaleEffect(x: placement.isMirrored ? -1 : 1, y: 1)
-                .rotationEffect(Angle(radians: placement.rotation))
-        } else {
-            EmptyView()
-        }
+    private func placementGlyph(_ placement: Placement, canvasFrame: CGRect) -> some View {
+        Text(placement.emoji.stringValue)
+            .font(.rounded(size: canvasFrame.height * placement.scale))
+            // the canvas proposes less width than the full-screen drag preview,
+            // so without this a large glyph gets a narrower frame in one than
+            // the other and .position centers them differently
+            .fixedSize()
+            .scaleEffect(x: placement.isMirrored ? -1 : 1, y: 1)
+            .rotationEffect(Angle(radians: placement.rotation))
     }
 
     var body: some View {
@@ -338,7 +286,7 @@ struct CanvasView: View {
                             placement in
                             let placementIsBeingDragged =
                                 activePlacementState?.placement.id == placement.id
-                            placementGlyph(placement)
+                            placementGlyph(placement, canvasFrame: canvasFrame)
                                 .contentShape(Rectangle())
                                 .gesture(
                                     makePickupGesture(placement: placement)
@@ -370,7 +318,11 @@ struct CanvasView: View {
                     .spring(response: 0.3, dampingFraction: 0.55),
                     value: placementService.state.map(\.id)
                 )
-                .modifier(GeometryTracker(binding: $canvasFrame))
+                .onGeometryChange(
+                    for: CGRect.self,
+                    of: { geometry in geometry.frame(in: .global) },
+                    action: { frame in canvasFrame = frame }
+                )
                 .modifier(RoundedBorder(cornerRadius: 20, lineWidth: 6))
                 .frame(maxWidth: .infinity)
                 .aspectRatio(1, contentMode: .fit)
@@ -423,7 +375,7 @@ struct CanvasView: View {
             }.padding()
 
             if let dragState = activePlacementState, let canvasFrame {
-                placementGlyph(dragState.placement)
+                placementGlyph(dragState.placement, canvasFrame: canvasFrame)
                     .position(
                         dragState.placement.position * canvasFrame.height
                             + canvasFrame.origin

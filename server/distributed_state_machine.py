@@ -35,18 +35,16 @@ class DistributedStateMachineServer[State, Action]:
     def process_actions(
         self, actions: list[SequencedAction[Action]], *, device_id: str
     ):
-        if device_id not in self.greatest_seen_device_sequence_numbers:
-            self.greatest_seen_device_sequence_numbers[device_id] = 0
-        actions = [
+        greatest_seen = self.greatest_seen_device_sequence_numbers.get(device_id, 0)
+        new_actions = [
             action
             for action in actions
-            if action.device_sequence_number
-            > self.greatest_seen_device_sequence_numbers[device_id]
+            if action.device_sequence_number > greatest_seen
         ]
-        if not actions:
+        if not new_actions:
             return
 
-        for action in actions:
+        for action in new_actions:
             self.greatest_seen_device_sequence_numbers[device_id] = (
                 action.device_sequence_number
             )

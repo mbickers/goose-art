@@ -57,12 +57,8 @@ extension DistributedStateMachineLocalState {
         self.onServerUpdate = onServerUpdate
         self.localState = localState
 
-        // a connection that already has a message hydrates from it here; one that doesn't
-        // — every fresh login — hydrates from the first message it delivers instead. both
-        // are the session's first update, and neither is news
-        if let message = connection?.mostRecentMessage {
-            applyServerMessage(message)
-        }
+        // the session hydrates from the first message the connection delivers, which is
+        // its opening state rather than news
         connection?.subscribe { [weak self] message in
             self?.applyServerMessage(message)
         }

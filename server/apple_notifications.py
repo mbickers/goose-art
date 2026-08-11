@@ -71,9 +71,7 @@ class DeviceNotificationTokenRegistry:
         self.save()
 
     def device_notification_tokens_for(self, *, user_id: str) -> set[str]:
-        if user_id not in self.device_notification_tokens_by_user_id:
-            return set()
-        return set(self.device_notification_tokens_by_user_id[user_id])
+        return set(self.device_notification_tokens_by_user_id.get(user_id, set()))
 
     def save(self):
         self.path.write_text(
