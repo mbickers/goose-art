@@ -114,6 +114,18 @@ class AuthenticationService {
                 connection: connection,
                 persistState: { localState in
                     saveLocalState(localState, token: token)
+                },
+                // our own placements never appear in this diff: apply() adds them to the
+                // state immediately, so by the time the server echoes one back it is in
+                // both the before and after state. a placement id that is new here was
+                // made on some other device
+                onServerUpdate: { previousPlacements, placements in
+                    let previousIds = Set(previousPlacements.map(\.id))
+                    if placements.contains(where: { placement in
+                        !previousIds.contains(placement.id)
+                    }) {
+                        MessageSound.playIfForeground()
+                    }
                 }
             )
         )

@@ -34,6 +34,7 @@ extension DistributedStateMachineLocalState {
     private let connection: AuthenticatedWebSocket<ServerMessage<State>, ClientMessage<Action>>?
     private let reduce: (State, Action) -> State
     private let persistState: ((DistributedStateMachineLocalState<State, Action>) -> Void)?
+    private let onServerUpdate: ((_ previous: State, _ current: State) -> Void)?
 
     private var localState: DistributedStateMachineLocalState<State, Action>
 
@@ -41,11 +42,13 @@ extension DistributedStateMachineLocalState {
         localState: DistributedStateMachineLocalState<State, Action>,
         reduce: @escaping (State, Action) -> State,
         connection: AuthenticatedWebSocket<ServerMessage<State>, ClientMessage<Action>>? = nil,
-        persistState: ((DistributedStateMachineLocalState<State, Action>) -> Void)? = nil
+        persistState: ((DistributedStateMachineLocalState<State, Action>) -> Void)? = nil,
+        onServerUpdate: ((_ previous: State, _ current: State) -> Void)? = nil
     ) {
         self.connection = connection
         self.reduce = reduce
         self.persistState = persistState
+        self.onServerUpdate = onServerUpdate
         self.localState = localState
 
         if let message = connection?.mostRecentMessage {
@@ -54,11 +57,16 @@ extension DistributedStateMachineLocalState {
                 state: message.state
             )
         }
+        // onServerUpdate is reported from here rather than from serverUpdate itself, so
+        // that the hydration above doesn't announce the entire state as a change
         connection?.subscribe { [weak self] message in
-            self?.serverUpdate(
+            guard let self else { return }
+            let previousState = state
+            serverUpdate(
                 greatestSeenDeviceSequenceNumber: message.greatestSeenDeviceSequenceNumber,
                 state: message.state
             )
+            onServerUpdate?(previousState, state)
         }
         pushUnsyncedActions()
     }
