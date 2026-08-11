@@ -2,3 +2,4 @@ user_tokens.json
 apns_config.json
 apns_key.p8
 device_notification_tokens.json
+saved_canvases/

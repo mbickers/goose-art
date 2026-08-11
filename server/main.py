@@ -1,7 +1,7 @@
 import asyncio
 import json
 from contextlib import asynccontextmanager
-from datetime import datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta
 from functools import cache
 from pathlib import Path
 from typing import Annotated
@@ -43,6 +43,10 @@ type CanvasServer = DistributedStateMachineServer[list[Placement], Action]
 clear_timezone = ZoneInfo("America/New_York")
 clear_time = time(hour=2)
 
+# untracked, like the other files the running server writes: one file per canvas that has
+# been cleared, so a day's work is recoverable afterwards
+saved_canvases_path = Path(__file__).parent / "saved_canvases"
+
 
 def seconds_until_next_clear(now: datetime) -> float:
     next_clear = datetime.combine(now.date(), clear_time, tzinfo=clear_timezone)
@@ -53,11 +57,24 @@ def seconds_until_next_clear(now: datetime) -> float:
     return (next_clear - now).total_seconds()
 
 
+# named for the moment of the clear in UTC, with dashes instead of colons so the files are
+# easy to pass to a shell
+def save_canvas(*, canvas_id: str, placements: list[Placement]):
+    path = (
+        saved_canvases_path / canvas_id / f"{datetime.now(UTC):%Y-%m-%dT%H-%M-%SZ}.json"
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(placements_to_json(placements), indent=2, ensure_ascii=False)
+    )
+
+
 async def clear_canvases_daily():
     while True:
         await asyncio.sleep(seconds_until_next_clear(datetime.now(clear_timezone)))
-        # set() because users share canvases, and clearing one twice would broadcast twice
-        for canvas in set(canvas_servers_by_user_id().values()):
+        for canvas_id, canvas in canvas_servers_by_canvas_id().items():
+            if canvas.state:
+                save_canvas(canvas_id=canvas_id, placements=canvas.state)
             canvas.reset()
         print(f"cleared canvases at {datetime.now(clear_timezone)}")
 
@@ -90,16 +107,12 @@ def user_ids_by_token() -> dict[str, str]:
 
 
 @cache
-def canvas_servers_by_user_id() -> dict[str, CanvasServer]:
-    canvas_servers = {
+def canvas_servers_by_canvas_id() -> dict[str, CanvasServer]:
+    return {
         user_config.canvas_id: DistributedStateMachineServer(
             initial_state=[], reduce=reduce_canvas
         )
         for user_config in user_configs_by_user_id.values()
-    }
-    return {
-        user_id: canvas_servers[user_config.canvas_id]
-        for user_id, user_config in user_configs_by_user_id.items()
     }
 
 
@@ -125,7 +138,8 @@ async def canvas_handler(
     if user_id is None:
         await websocket.close(code=4001, reason="unauthenticated")
         return
-    canvas = canvas_servers_by_user_id()[user_id]
+    canvas_id = user_configs_by_user_id[user_id].canvas_id
+    canvas = canvas_servers_by_canvas_id()[canvas_id]
 
     await websocket.accept()
 
@@ -161,6 +175,12 @@ async def canvas_handler(
             # than mutating it
             before = canvas.state
             canvas.process_actions(actions, device_id=device_id)
+
+            # comparing before and after rather than reading the actions: a clear a
+            # reconnecting client resent changes nothing, and taking the last placement
+            # off the canvas empties it just as a clear does
+            if before and not canvas.state:
+                save_canvas(canvas_id=canvas_id, placements=before)
 
             for emoji in placed_emojis(before=before, after=canvas.state):
                 for key in notification_keys:
@@ -201,7 +221,7 @@ async def inspect_canvas(authorization: Annotated[str | None, Header()] = None):
     user_id = authenticated_user_id(authorization)
     if user_id is None:
         raise HTTPException(status_code=401)
-    canvas = canvas_servers_by_user_id()[user_id]
+    canvas = canvas_servers_by_canvas_id()[user_configs_by_user_id[user_id].canvas_id]
     data = {
         "placements": placements_to_json(canvas.state),
         "greatestSeenDeviceSequenceNumbers": canvas.greatest_seen_device_sequence_numbers,
