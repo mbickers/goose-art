@@ -342,6 +342,9 @@ struct CanvasView: View {
                                     makePickupGesture(placement: placement)
                                 )
                                 .opacity(placementIsBeingDragged ? 0.1 : 1)
+                                .transition(
+                                    AnyTransition.scale(scale: 1.25).combined(with: .opacity)
+                                )
                                 .position(
                                     placement.position * canvasFrame.height
                                 )
@@ -359,6 +362,12 @@ struct CanvasView: View {
                             .gesture(secondTouchGesture)
                     }
                 }
+                // keyed on ids so only placements coming and going animate: a dragged
+                // placement's position has to stay glued to the finger
+                .animation(
+                    .spring(response: 0.3, dampingFraction: 0.55),
+                    value: placementService.state.map(\.id)
+                )
                 .modifier(GeometryTracker(binding: $canvasFrame))
                 .modifier(RoundedBorder(cornerRadius: 20, lineWidth: 6))
                 .frame(maxWidth: .infinity)
