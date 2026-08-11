@@ -37,8 +37,8 @@ needs no credentials.
 
 **Delivery — `server/apple_notifications.py`.** Everything APNs, and nothing else.
 
-- `DeviceTokenRegistry` maps user id to APNs device tokens, persisted to
-  `device_tokens.json`. A device belongs to one user at a time: registering it
+- `DeviceNotificationTokenRegistry` maps user id to APNs device tokens, persisted to
+  `device_notification_tokens.json`. A device belongs to one user at a time: registering it
   moves it, so logging in as someone else on a shared phone stops delivering the
   previous user's notifications.
 - `send_push(user_id:, body:)` sends to one user's devices and drops tokens APNs
@@ -55,7 +55,7 @@ general. It groups events sharing a key into one flush, anchoring the window at
 the *first* event of a batch rather than extending it, so a steady stream still
 delivers on a bounded delay instead of being held back indefinitely.
 
-**Wiring — `server/main.py`.** `POST /deviceToken` registers a device, and
+**Wiring — `server/main.py`.** `POST /deviceNotificationToken` registers a device, and
 `canvas_handler` feeds new placements into the coalescer.
 
 Comparing states rather than reading the actions keeps
@@ -71,7 +71,7 @@ single message carries several placements *and* re-upserts one of them, which
 means an offline client reconnecting.
 
 **iOS.** `AuthenticationService` asks iOS to register when a session starts and
-posts the token in `receivedDeviceToken`, reading the auth token back out of
+posts the token in `receivedDeviceNotificationToken`, reading the auth token back out of
 `TokenStore` rather than holding it. `PushNotificationDelegate` in
 `GooseArtApp.swift` is only the seam UIKit requires: it hands the token to the
 authentication service and suppresses banners while the app is foregrounded,
@@ -90,4 +90,4 @@ until something actually needs one.
 
 The simulator's `simctl push` will exercise presentation, but a real end-to-end
 send needs a device (or an Apple Silicon simulator, which supports real APNs
-sandbox pushes) so that a genuine device token reaches `/deviceToken`.
+sandbox pushes) so that a genuine device token reaches `/deviceNotificationToken`.

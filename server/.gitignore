@@ -1,4 +1,4 @@
 static_data.json
 apns_config.json
 apns_key.p8
-device_tokens.json
+device_notification_tokens.json

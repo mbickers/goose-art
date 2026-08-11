@@ -144,17 +144,19 @@ class AuthenticationService {
 
     // reads the token back rather than holding it, so that a token cleared by logout
     // stops this from registering a device against the user who just left
-    func receivedDeviceToken(_ deviceToken: String) {
+    func receivedDeviceNotificationToken(_ deviceNotificationToken: String) {
         guard let baseURL, let token = TokenStore.load() else { return }
 
         var request = URLRequest(
-            url: baseURL.appendingPathComponent("deviceToken")
+            url: baseURL.appendingPathComponent("deviceNotificationToken")
         )
         request.httpMethod = "POST"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try! JSONEncoder().encode(
-            DeviceTokenBody(deviceToken: deviceToken)
+            DeviceNotificationTokenBody(
+                deviceNotificationToken: deviceNotificationToken
+            )
         )
 
         Task {
@@ -163,6 +165,6 @@ class AuthenticationService {
     }
 }
 
-private struct DeviceTokenBody: Encodable {
-    let deviceToken: String
+private struct DeviceNotificationTokenBody: Encodable {
+    let deviceNotificationToken: String
 }

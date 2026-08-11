@@ -28,8 +28,11 @@ struct GooseArtApp: App {
             // a device token can only arrive after a session asked to register for one,
             // which needs at least an await to get through, so this is always wired first
             .onAppear {
-                pushNotificationDelegate.receivedDeviceToken = { deviceToken in
-                    authenticationService.receivedDeviceToken(deviceToken)
+                pushNotificationDelegate.receivedDeviceNotificationToken = {
+                    deviceNotificationToken in
+                    authenticationService.receivedDeviceNotificationToken(
+                        deviceNotificationToken
+                    )
                 }
             }
         }
@@ -39,7 +42,7 @@ struct GooseArtApp: App {
 class PushNotificationDelegate: NSObject, UIApplicationDelegate,
     UNUserNotificationCenterDelegate
 {
-    var receivedDeviceToken: ((String) -> Void)?
+    var receivedDeviceNotificationToken: ((String) -> Void)?
 
     func application(
         _ application: UIApplication,
@@ -58,7 +61,7 @@ class PushNotificationDelegate: NSObject, UIApplicationDelegate,
     ) {
         let hex = deviceToken.map { byte in String(format: "%02x", byte) }
             .joined()
-        receivedDeviceToken?(hex)
+        receivedDeviceNotificationToken?(hex)
     }
 
     func application(

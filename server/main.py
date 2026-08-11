@@ -19,7 +19,7 @@ from fastapi import (
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from apple_notifications import apns_client, device_token_registry
+from apple_notifications import apns_client, device_notification_token_registry
 from canvas_notifications import (
     PlacementNotificationKey,
     notification_coalescer,
@@ -189,18 +189,21 @@ async def canvas_handler(
         unsubscribe()
 
 
-class DeviceTokenBody(BaseModel):
-    device_token: str = Field(alias="deviceToken")
+class DeviceNotificationTokenBody(BaseModel):
+    device_notification_token: str = Field(alias="deviceNotificationToken")
 
 
-@app.post("/deviceToken")
-async def register_device_token(
-    body: DeviceTokenBody, authorization: Annotated[str | None, Header()] = None
+@app.post("/deviceNotificationToken")
+async def register_device_notification_token(
+    body: DeviceNotificationTokenBody,
+    authorization: Annotated[str | None, Header()] = None,
 ):
     user_id = authenticated_user_id(authorization)
     if user_id is None:
         raise HTTPException(status_code=401)
-    device_token_registry().register(user_id=user_id, device_token=body.device_token)
+    device_notification_token_registry().register(
+        user_id=user_id, device_notification_token=body.device_notification_token
+    )
 
 
 @app.get("/login")
