@@ -87,6 +87,7 @@ struct Debug: View {
 
 struct CanvasView: View {
     let placementService: DistributedStateMachineClient<[Placement], CanvasAction>
+    let userId: String
     let logout: (() -> Void)?
 
     @State private var recentEmojisStore = RecentEmojiService()
@@ -438,7 +439,7 @@ struct CanvasView: View {
             Button("Clear", role: .destructive) {
                 placementService.apply(.clear)
             }
-            Button("Log out", role: .destructive) {
+            Button("Log out \(userId)", role: .destructive) {
                 logout?()
             }
         }
@@ -451,6 +452,7 @@ struct CanvasView: View {
             localState: DistributedStateMachineLocalState(initialState: []),
             reduce: reduceCanvas(state:action:)
         ),
+        userId: "max",
         logout: nil
     )
 }

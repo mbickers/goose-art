@@ -15,9 +15,10 @@ struct GooseArtApp: App {
         WindowGroup {
             Group {
                 switch authenticationService.state {
-                case .authenticated(let canvasService):
+                case .authenticated(let canvasService, let userId):
                     CanvasView(
                         placementService: canvasService,
+                        userId: userId,
                         logout: { authenticationService.logout() }
                     )
 

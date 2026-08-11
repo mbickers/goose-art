@@ -3,7 +3,10 @@ import SwiftUI
 import UserNotifications
 
 enum AuthenticationState {
-    case authenticated(canvasService: DistributedStateMachineClient<[Placement], CanvasAction>)
+    case authenticated(
+        canvasService: DistributedStateMachineClient<[Placement], CanvasAction>,
+        userId: String
+    )
     case unauthenticated(reason: String?)
 }
 
@@ -59,26 +62,28 @@ class AuthenticationService {
 
     init(baseURL: URL?) {
         self.baseURL = baseURL
-        // a stored token is trusted without asking the server, so the app still opens
+        // a stored session is trusted without asking the server, so the app still opens
         // with its local canvas offline. a revoked one is caught by the websocket 403
-        if let token = TokenStore.load() {
-            startSession(token: token)
+        if let session = SessionStore.load() {
+            startSession(session)
         }
     }
 
     // checks the token before authenticating, so a bad code shows an error on the login
     // screen instead of flashing the canvas and being kicked back by the websocket
     func login(token: String) async {
+        // offline there is nobody to name the user, so the code they typed stands in
         guard let baseURL else {
-            startSession(token: token)
+            startSession(Session(token: token, userId: token))
             return
         }
 
         var request = URLRequest(url: baseURL.appendingPathComponent("login"))
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        let response = try? await URLSession.shared.data(for: request).1
+        let result = try? await URLSession.shared.data(for: request)
 
-        guard let response = response as? HTTPURLResponse else {
+        guard let (data, response) = result, let response = response as? HTTPURLResponse
+        else {
             state = .unauthenticated(reason: "couldn't reach the server.")
             return
         }
@@ -86,12 +91,17 @@ class AuthenticationService {
             state = .unauthenticated(reason: "that code didn't work.")
             return
         }
-        startSession(token: token)
+        guard let body = try? JSONDecoder().decode(LoginResponse.self, from: data) else {
+            state = .unauthenticated(reason: "couldn't reach the server.")
+            return
+        }
+        startSession(Session(token: token, userId: body.userId))
     }
 
-    private func startSession(token: String) {
+    private func startSession(_ session: Session) {
+        let token = session.token
         canvasConnection?.disconnect()
-        TokenStore.save(token)
+        SessionStore.save(session)
 
         let connection = baseURL.map { baseURL in
             AuthenticatedWebSocket<ServerMessage<[Placement]>, ClientMessage<CanvasAction>>(
@@ -130,14 +140,15 @@ class AuthenticationService {
                         MessageSound.playIfForeground()
                     }
                 }
-            )
+            ),
+            userId: session.userId
         )
     }
 
     func logout(reason: String? = nil) {
         canvasConnection?.disconnect()
         canvasConnection = nil
-        TokenStore.clear()
+        SessionStore.clear()
         state = .unauthenticated(reason: reason)
     }
 
@@ -154,10 +165,10 @@ class AuthenticationService {
         UIApplication.shared.registerForRemoteNotifications()
     }
 
-    // reads the token back rather than holding it, so that a token cleared by logout
+    // reads the token back rather than holding it, so that a session cleared by logout
     // stops this from registering a device against the user who just left
     func receivedDeviceNotificationToken(_ deviceNotificationToken: String) {
-        guard let baseURL, let token = TokenStore.load() else { return }
+        guard let baseURL, let token = SessionStore.load()?.token else { return }
 
         var request = URLRequest(
             url: baseURL.appendingPathComponent("deviceNotificationToken")
@@ -179,4 +190,8 @@ class AuthenticationService {
 
 private struct DeviceNotificationTokenBody: Encodable {
     let deviceNotificationToken: String
+}
+
+private struct LoginResponse: Decodable {
+    let userId: String
 }
