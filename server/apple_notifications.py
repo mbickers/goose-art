@@ -7,7 +7,9 @@ from typing import Any
 
 from aioapns import APNs, NotificationRequest, PushType
 
-# untracked for the same reasons as static_data.json: the signing key stays out of the
+from users import user_configs_by_user_id
+
+# untracked for the same reasons as user_tokens.json: the signing key stays out of the
 # repo, and deploy.sh (which only rsyncs git-tracked files) leaves the deployed copy alone
 apns_config_path = Path(__file__).parent / "apns_config.json"
 device_notification_tokens_path = (
@@ -24,9 +26,6 @@ class ApnsConfig:
     key_id: str
     team_id: str
     bundle_id: str
-    # debug builds register against APNs sandbox and release builds against production;
-    # sending to the wrong one is silently dropped rather than reported as an error
-    use_sandbox: bool
 
     @classmethod
     def from_json(cls, data: dict[str, Any], *, directory: Path):
@@ -35,7 +34,6 @@ class ApnsConfig:
             key_id=data["keyId"],
             team_id=data["teamId"],
             bundle_id=data["bundleId"],
-            use_sandbox=data["useSandbox"],
         )
 
 
@@ -96,25 +94,37 @@ def device_notification_token_registry() -> DeviceNotificationTokenRegistry:
 
 
 # None when the config file is absent, so that a local server runs without APNs
-# credentials. main.py reports which mode it started in.
+# credentials. main.py reports at startup whether it found one.
 @cache
-def apns_client() -> APNs | None:
+def apns_config() -> ApnsConfig | None:
     if not apns_config_path.exists():
         return None
-    config = ApnsConfig.from_json(
+    return ApnsConfig.from_json(
         json.loads(apns_config_path.read_text()), directory=apns_config_path.parent
     )
+
+
+# one client per environment, because a device token is only valid in the environment the
+# app registered with: sending to the other one is silently dropped rather than reported
+# as an error
+@cache
+def apns_client(*, use_sandbox: bool) -> APNs | None:
+    config = apns_config()
+    if config is None:
+        return None
     return APNs(
         key=config.key,
         key_id=config.key_id,
         team_id=config.team_id,
         topic=config.bundle_id,
-        use_sandbox=config.use_sandbox,
+        use_sandbox=use_sandbox,
     )
 
 
 async def send_push(*, user_id: str, body: str):
-    client = apns_client()
+    client = apns_client(
+        use_sandbox=user_configs_by_user_id[user_id].use_sandbox_notifications
+    )
     if client is None:
         return
 

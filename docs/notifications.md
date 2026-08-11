@@ -7,7 +7,7 @@ you share. Placements are batched so a burst arrives as one notification.
 
 Nothing here is in the repo — the signing key is a secret, and `deploy.sh` only
 rsyncs git-tracked files, so the droplet's copies survive deploys the same way
-`static_data.json` does.
+`user_tokens.json` does.
 
 1. In the Apple Developer portal, enable the Push Notifications capability for
    the App ID `com.maxbickers.goose-art`, then create an APNs auth key and
@@ -20,14 +20,17 @@ rsyncs git-tracked files, so the droplet's copies survive deploys the same way
   "keyPath": "apns_key.p8",
   "keyId": "ABCD123456",
   "teamId": "TEAM123456",
-  "bundleId": "com.maxbickers.goose-art",
-  "useSandbox": false
+  "bundleId": "com.maxbickers.goose-art"
 }
 ```
 
-`useSandbox` has to match how the app was built: `true` for a build run from
-Xcode, `false` for TestFlight or the App Store. A mismatch is dropped silently
-rather than reported as an error, so it is worth double checking.
+The same key signs both APNs environments, and which one a push goes to is a
+property of the *user*: `use_sandbox_notifications` in `server/users.py`. It has
+to match how that user's app was built — sandbox for a build run from Xcode,
+production for TestFlight or the App Store — because a device token is only valid
+in the environment the app registered with, and a mismatch is dropped silently
+rather than reported as an error. The `dev user 1`/`dev user 2` accounts are the
+sandbox ones; `max` and `brian` are production.
 
 Without `apns_config.json` the server runs with notifications disabled and logs
 `push notifications disabled: no apns_config.json` at startup, so a local server
@@ -41,8 +44,9 @@ needs no credentials.
   `device_notification_tokens.json`. A device belongs to one user at a time: registering it
   moves it, so logging in as someone else on a shared phone stops delivering the
   previous user's notifications.
-- `send_push(user_id:, body:)` sends to one user's devices and drops tokens APNs
-  rejects permanently.
+- `send_push(user_id:, body:)` sends to one user's devices, through the APNs
+  environment that user is configured for, and drops tokens APNs rejects
+  permanently.
 
 **Everything else — `server/canvas_notifications.py`.** What to say and when to
 say it. `placed_emojis` compares the canvas before and after a message and reports
