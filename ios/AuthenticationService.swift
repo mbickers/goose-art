@@ -1,5 +1,6 @@
 import CryptoKit
 import SwiftUI
+import UserNotifications
 
 enum AuthenticationState {
     case authenticated(canvasService: DistributedStateMachineClient<[Placement], CanvasAction>)
@@ -105,12 +106,7 @@ class AuthenticationService {
                 }
             )
         }
-        if let baseURL {
-            PushNotificationService.shared.sessionStarted(
-                baseURL: baseURL,
-                token: token
-            )
-        }
+        Task { await requestNotificationAuthorization() }
 
         canvasConnection = connection
         state = .authenticated(
@@ -129,8 +125,44 @@ class AuthenticationService {
     func logout(reason: String? = nil) {
         canvasConnection?.disconnect()
         canvasConnection = nil
-        PushNotificationService.shared.sessionEnded()
         TokenStore.clear()
         state = .unauthenticated(reason: reason)
     }
+
+    // asking again once the user has answered returns that answer without prompting them
+    // a second time, so this can run on every session
+    private func requestNotificationAuthorization() async {
+        guard baseURL != nil else { return }
+
+        let granted =
+            (try? await UNUserNotificationCenter.current().requestAuthorization(
+                options: [.alert, .sound, .badge]
+            )) ?? false
+        guard granted else { return }
+        UIApplication.shared.registerForRemoteNotifications()
+    }
+
+    // reads the token back rather than holding it, so that a token cleared by logout
+    // stops this from registering a device against the user who just left
+    func receivedDeviceToken(_ deviceToken: String) {
+        guard let baseURL, let token = TokenStore.load() else { return }
+
+        var request = URLRequest(
+            url: baseURL.appendingPathComponent("deviceToken")
+        )
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try! JSONEncoder().encode(
+            DeviceTokenBody(deviceToken: deviceToken)
+        )
+
+        Task {
+            _ = try? await URLSession.shared.data(for: request)
+        }
+    }
+}
+
+private struct DeviceTokenBody: Encodable {
+    let deviceToken: String
 }

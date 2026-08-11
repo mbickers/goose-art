@@ -70,11 +70,12 @@ the canvas's z-order, not the order they were placed. That is only visible when 
 single message carries several placements *and* re-upserts one of them, which
 means an offline client reconnecting.
 
-**iOS — `ios/PushNotificationService.swift`.** Starting a session asks iOS to
-register; the app delegate's callback is the only thing that posts a token, since
-asking to register again hands back the token iOS already holds. Banners are
-suppressed while the app is foregrounded, because the canvas already shows an
-arriving placement live.
+**iOS.** `AuthenticationService` asks iOS to register when a session starts and
+posts the token in `receivedDeviceToken`, reading the auth token back out of
+`TokenStore` rather than holding it. `PushNotificationDelegate` in
+`GooseArtApp.swift` is only the seam UIKit requires: it hands the token to the
+authentication service and suppresses banners while the app is foregrounded,
+because the canvas already shows an arriving placement live.
 
 ## Adding a second kind of notification
 
