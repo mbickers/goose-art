@@ -32,11 +32,9 @@ class DistributedStateMachineServer[State, Action]:
         self.subscribers: list[StateSubscriber[State]] = []
         self.greatest_seen_device_sequence_numbers: dict[str, int] = {}
 
-    # returns the actions that were actually applied, so that a caller can react to them
-    # without also reacting to the ones a reconnecting client resent
     def process_actions(
         self, actions: list[SequencedAction[Action]], *, device_id: str
-    ) -> list[Action]:
+    ):
         if device_id not in self.greatest_seen_device_sequence_numbers:
             self.greatest_seen_device_sequence_numbers[device_id] = 0
         actions = [
@@ -46,7 +44,7 @@ class DistributedStateMachineServer[State, Action]:
             > self.greatest_seen_device_sequence_numbers[device_id]
         ]
         if not actions:
-            return []
+            return
 
         for action in actions:
             self.greatest_seen_device_sequence_numbers[device_id] = (
@@ -55,7 +53,6 @@ class DistributedStateMachineServer[State, Action]:
             self.state = self.reduce(self.state, action.action)
 
         self.on_change()
-        return [action.action for action in actions]
 
     def reset(self):
         self.state = self.initial_state

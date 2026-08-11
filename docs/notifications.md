@@ -49,17 +49,24 @@ needs no credentials.
   indefinitely.
 
 **Producer — `server/canvas_notifications.py`.** The only part that knows what an
-emoji is. `placed_emojis` picks new placements out of the actions the canvas
-actually applied; `flush_placements` formats the batch and sends it.
+emoji is. `placed_emojis` compares the canvas before and after a message and
+reports the placements that appeared; `flush_placements` formats the batch and
+sends it.
 
 **Wiring — `server/main.py`.** `POST /deviceToken` registers a device, and
 `canvas_handler` feeds new placements into the coalescer.
-`DistributedStateMachineServer.process_actions` returns the actions it applied, so a
-reconnecting client that resends actions the server already saw cannot re-notify.
 
-Two things deliberately do not notify: moving, resizing or rotating an emoji that
-is already on the canvas (it is an upsert of an existing id, not a new placement),
-and your own placements.
+Comparing states rather than reading the actions keeps
+`DistributedStateMachineServer` untouched, and means the cases that shouldn't
+notify fall out on their own rather than each needing a rule: an emoji that was
+only moved keeps its id, one that was placed and dragged off the canvas in the
+same message never lands in the after state, and actions a reconnecting client
+resends change nothing at all. Your own placements don't notify you either.
+
+The one wrinkle is ordering: new emoji are reported in the order they ended up in
+the canvas's z-order, not the order they were placed. That is only visible when a
+single message carries several placements *and* re-upserts one of them, which
+means an offline client reconnecting.
 
 **iOS — `ios/PushNotificationService.swift`.** The device token and the signed-in
 session arrive independently and in either order, so both are held until there is

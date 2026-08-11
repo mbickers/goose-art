@@ -173,13 +173,13 @@ async def canvas_handler(
             actions = deserialize_client_message(
                 data, deserialize_action=action_from_json
             )
-            existing_placement_ids = {placement.id for placement in canvas.state}
-            applied = canvas.process_actions(actions, device_id=device_id)
+            # safe to hold across the call because reducing replaces the state rather
+            # than mutating it
+            before = canvas.state
+            canvas.process_actions(actions, device_id=device_id)
 
             if notification.recipient_user_ids:
-                for emoji in placed_emojis(
-                    actions=applied, existing_placement_ids=existing_placement_ids
-                ):
+                for emoji in placed_emojis(before=before, after=canvas.state):
                     placement_coalescer().add(key=notification, event=emoji)
     except WebSocketDisconnect:
         pass
