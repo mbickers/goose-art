@@ -1,19 +1,15 @@
 import UIKit
 import UserNotifications
 
-// the device token and the signed-in session arrive independently and in either order,
-// so both are held until there is enough to register with the server
 @MainActor
 final class PushNotificationService {
     static let shared = PushNotificationService()
 
-    private var deviceToken: String?
     private var session: (baseURL: URL, token: String)?
 
     func sessionStarted(baseURL: URL, token: String) {
         session = (baseURL, token)
         Task { await requestAuthorization() }
-        registerWithServer()
     }
 
     // the token stays registered on logout: it is re-pointed at whoever logs in next,
@@ -22,22 +18,10 @@ final class PushNotificationService {
         session = nil
     }
 
+    // registering again hands back the token iOS already holds, so every session ends up
+    // here and this is the only place that needs to post one
     func received(deviceToken: String) {
-        self.deviceToken = deviceToken
-        registerWithServer()
-    }
-
-    private func requestAuthorization() async {
-        let granted =
-            (try? await UNUserNotificationCenter.current().requestAuthorization(
-                options: [.alert, .sound, .badge]
-            )) ?? false
-        guard granted else { return }
-        UIApplication.shared.registerForRemoteNotifications()
-    }
-
-    private func registerWithServer() {
-        guard let deviceToken, let session else { return }
+        guard let session else { return }
 
         var request = URLRequest(
             url: session.baseURL.appendingPathComponent("deviceToken")
@@ -55,6 +39,15 @@ final class PushNotificationService {
         Task {
             _ = try? await URLSession.shared.data(for: request)
         }
+    }
+
+    private func requestAuthorization() async {
+        let granted =
+            (try? await UNUserNotificationCenter.current().requestAuthorization(
+                options: [.alert, .sound, .badge]
+            )) ?? false
+        guard granted else { return }
+        UIApplication.shared.registerForRemoteNotifications()
     }
 }
 
