@@ -19,6 +19,7 @@ from fastapi import (
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from apple_notifications import apns_client, device_token_registry
 from canvas_notifications import (
     PlacementNotification,
     placed_emojis,
@@ -36,7 +37,6 @@ from distributed_state_machine import (
     deserialize_client_message,
     serialize_server_message,
 )
-from notifications import apns_client, device_token_registry
 
 type CanvasServer = DistributedStateMachineServer[list[Placement], Action]
 

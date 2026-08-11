@@ -35,23 +35,25 @@ needs no credentials.
 
 ## How it works
 
-**Generic layer — `server/notifications.py`.** Knows nothing about canvases.
+**Delivery — `server/apple_notifications.py`.** Everything APNs, and nothing else.
 
 - `DeviceTokenRegistry` maps user id to APNs device tokens, persisted to
   `device_tokens.json`. A device belongs to one user at a time: registering it
   moves it, so logging in as someone else on a shared phone stops delivering the
   previous user's notifications.
-- `send_push(user_ids:, body:)` fans out to those users' devices and drops tokens
-  APNs rejects permanently.
-- `Coalescer[Key, Event]` batches events sharing a key into one flush. The window
-  is anchored at the *first* event of a batch rather than extended by later ones,
-  so a steady stream still delivers on a bounded delay instead of being held back
-  indefinitely.
+- `send_push(user_id:, body:)` sends to one user's devices and drops tokens APNs
+  rejects permanently.
 
-**Producer — `server/canvas_notifications.py`.** The only part that knows what an
-emoji is. `placed_emojis` compares the canvas before and after a message and
-reports the placements that appeared; `flush_placements` formats the batch and
-sends it.
+**Everything else — `server/canvas_notifications.py`.** What to say and when to
+say it. `placed_emojis` compares the canvas before and after a message and reports
+the placements that appeared, and `flush_placements` formats the batch and sends
+it to each recipient.
+
+`Coalescer[Key, Event]` also lives here rather than beside the APNs code, because
+batching is a decision about *this* notification, not something pushes need in
+general. It groups events sharing a key into one flush, anchoring the window at
+the *first* event of a batch rather than extending it, so a steady stream still
+delivers on a bounded delay instead of being held back indefinitely.
 
 **Wiring — `server/main.py`.** `POST /deviceToken` registers a device, and
 `canvas_handler` feeds new placements into the coalescer.
@@ -68,18 +70,20 @@ the canvas's z-order, not the order they were placed. That is only visible when 
 single message carries several placements *and* re-upserts one of them, which
 means an offline client reconnecting.
 
-**iOS — `ios/PushNotificationService.swift`.** The device token and the signed-in
-session arrive independently and in either order, so both are held until there is
-enough to register. Banners are suppressed while the app is foregrounded, since
-the canvas already shows an arriving placement live.
+**iOS — `ios/PushNotificationService.swift`.** Starting a session asks iOS to
+register; the app delegate's callback is the only thing that posts a token, since
+asking to register again hands back the token iOS already holds. Banners are
+suppressed while the app is foregrounded, because the canvas already shows an
+arriving placement live.
 
 ## Adding a second kind of notification
 
-Write a new producer module next to `canvas_notifications.py`: a key type, a flush
-that calls `send_push`, and a `Coalescer` if that kind should batch. Then call
-`add` from wherever the event happens. Nothing in the generic layer needs to
-change, and there is deliberately no routing or preference system until something
-actually needs one.
+Write a module next to `canvas_notifications.py` holding whatever that kind needs
+— the text it produces, and a `Coalescer` if it should batch — then call
+`send_push` and trigger it from wherever the event happens.
+`apple_notifications.py` shouldn't need to change: it only knows how to get a
+string to a user's devices. There is deliberately no routing or preference system
+until something actually needs one.
 
 ## Testing delivery
 

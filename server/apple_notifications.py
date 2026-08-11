@@ -1,10 +1,9 @@
 import asyncio
 import json
-from collections.abc import Coroutine
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any
 
 from aioapns import APNs, NotificationRequest, PushType
 
@@ -57,7 +56,7 @@ class DeviceTokenRegistry:
             other_user_id: device_tokens - {device_token}
             for other_user_id, device_tokens in self.device_tokens_by_user_id.items()
         } | {
-            user_id: self.device_tokens_for(user_ids=[user_id]) | {device_token},
+            user_id: self.device_tokens_for(user_id=user_id) | {device_token},
         }
         self.save()
 
@@ -68,13 +67,10 @@ class DeviceTokenRegistry:
         }
         self.save()
 
-    def device_tokens_for(self, *, user_ids: list[str]) -> set[str]:
-        return {
-            device_token
-            for user_id in user_ids
-            if user_id in self.device_tokens_by_user_id
-            for device_token in self.device_tokens_by_user_id[user_id]
-        }
+    def device_tokens_for(self, *, user_id: str) -> set[str]:
+        if user_id not in self.device_tokens_by_user_id:
+            return set()
+        return set(self.device_tokens_by_user_id[user_id])
 
     def save(self):
         self.path.write_text(
@@ -112,13 +108,13 @@ def apns_client() -> APNs | None:
     )
 
 
-async def send_push(*, user_ids: list[str], body: str):
+async def send_push(*, user_id: str, body: str):
     client = apns_client()
     if client is None:
         return
 
     registry = device_token_registry()
-    device_tokens = sorted(registry.device_tokens_for(user_ids=user_ids))
+    device_tokens = sorted(registry.device_tokens_for(user_id=user_id))
     results = await asyncio.gather(
         *[
             client.send_notification(
@@ -140,33 +136,3 @@ async def send_push(*, user_ids: list[str], body: str):
             print(f"push rejected: {result.description}")
             if result.description in dead_token_reasons:
                 registry.discard(device_token=device_token)
-
-
-class CoalescedFlush[Key, Event](Protocol):
-    def __call__(self, *, key: Key, events: list[Event]) -> Coroutine[Any, Any, None]:
-        pass
-
-
-# batches events sharing a key into one flush. the window is anchored at the first event
-# of a batch rather than extended by later ones, so a steady stream of events still
-# delivers on a bounded delay instead of being held back indefinitely.
-class Coalescer[Key, Event]:
-    def __init__(self, *, delay: float, flush: CoalescedFlush[Key, Event]):
-        self.delay = delay
-        self.flush = flush
-        self.pending_events: dict[Key, list[Event]] = {}
-        # held so that in-flight batches aren't garbage collected mid-wait
-        self.flush_tasks: dict[Key, asyncio.Task] = {}
-
-    def add(self, *, key: Key, event: Event):
-        if key in self.pending_events:
-            self.pending_events[key].append(event)
-            return
-        self.pending_events[key] = [event]
-        self.flush_tasks[key] = asyncio.create_task(self.flush_after_delay(key=key))
-
-    async def flush_after_delay(self, *, key: Key):
-        await asyncio.sleep(self.delay)
-        events = self.pending_events.pop(key)
-        del self.flush_tasks[key]
-        await self.flush(key=key, events=events)
