@@ -43,8 +43,6 @@ type CanvasServer = DistributedStateMachineServer[list[Placement], Action]
 clear_timezone = ZoneInfo("America/New_York")
 clear_time = time(hour=2)
 
-# untracked, like the other files the running server writes: one file per canvas that has
-# been cleared, so a day's work is recoverable afterwards
 saved_canvases_path = Path(__file__).parent / "saved_canvases"
 
 
@@ -57,8 +55,6 @@ def seconds_until_next_clear(now: datetime) -> float:
     return (next_clear - now).total_seconds()
 
 
-# named for the moment of the clear in UTC, with dashes instead of colons so the files are
-# easy to pass to a shell
 def save_canvas(*, canvas_id: str, placements: list[Placement]):
     path = (
         saved_canvases_path / canvas_id / f"{datetime.now(UTC):%Y-%m-%dT%H-%M-%SZ}.json"
