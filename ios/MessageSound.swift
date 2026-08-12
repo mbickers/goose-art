@@ -1,16 +1,18 @@
-import AudioToolbox
+import AVFAudio
 import UIKit
 
-// System Sound Services rather than AVAudioPlayer: this is a short alert, so it needs
-// no audio session of its own, and it follows the ring/silent switch like a message tone
+// AVAudioPlayer on a .playback session rather than System Sound Services: a system sound
+// is muted by the ring/silent switch, and this sound is app audio the user asked for.
+// .mixWithOthers so it lands over whatever else is playing instead of pausing it
 enum MessageSound {
     static let enabledDefaultsKey = "soundEffectsEnabled"
 
-    private static let soundId: SystemSoundID = {
+    private static let player: AVAudioPlayer = {
+        try! AVAudioSession.sharedInstance().setCategory(.playback, options: [.mixWithOthers])
         let url = Bundle.main.url(forResource: "message", withExtension: "caf")!
-        var soundId: SystemSoundID = 0
-        AudioServicesCreateSystemSoundID(url as CFURL, &soundId)
-        return soundId
+        let player = try! AVAudioPlayer(contentsOf: url)
+        player.prepareToPlay()
+        return player
     }()
 
     // read rather than stored, so the setting takes effect on the next sound instead of
@@ -21,6 +23,7 @@ enum MessageSound {
 
     static func playIfForeground() {
         guard enabled, UIApplication.shared.applicationState == .active else { return }
-        AudioServicesPlaySystemSound(soundId)
+        player.currentTime = 0
+        player.play()
     }
 }
