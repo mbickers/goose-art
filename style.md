@@ -1,5 +1,19 @@
 # Style
 
+## Formatting is automated, so nothing below is about whitespace
+
+`./format.sh` formats and lints everything — ruff for Python, swift-format for
+Swift — or `./format.sh <files>` for specific ones. The pre-commit hook in
+`.githooks/pre-commit` runs it on staged files and restages the result, so
+formatting never reaches a review. Point git at it once per clone:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+The rules that follow are the ones a formatter can't check: what to name, what
+to label, and when a thing is worth naming at all.
+
 ## Use explicit, required keyword arguments whenever the meaning of an argument is not obvious
 
 A call site should be readable without opening the function being called. If a

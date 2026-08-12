@@ -102,7 +102,7 @@ means an offline client reconnecting.
 
 **iOS.** `AuthenticationService` asks iOS to register when a session starts and
 posts the token in `receivedDeviceNotificationToken`, reading the auth token back out of
-`TokenStore` rather than holding it. `PushNotificationDelegate` in
+`SessionStore` rather than holding it. `PushNotificationDelegate` in
 `GooseArtApp.swift` is only the seam UIKit requires: it hands the token to the
 authentication service, suppresses banners while the app is foregrounded because
 the canvas already shows an arriving placement live, and clears delivered
