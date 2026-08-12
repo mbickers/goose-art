@@ -1,5 +1,6 @@
 # Goose Art!
 Goose Art is an iOS app for pairs of users to create illustrations with emojis.
 
-Run `./format.sh` to format and lint everything, or `./format.sh <files>` for
-specific ones. The pre-commit hook runs it on staged files.
+Conventions, and the tooling that enforces them, are in [style.md](style.md).
+
+Licensed under the GNU General Public License v3.0 — see [LICENSE](LICENSE).
