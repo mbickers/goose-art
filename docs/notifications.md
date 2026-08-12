@@ -74,13 +74,19 @@ handed on subscribe shows all of it at once. Connections are counted rather than
 flagged, because one user can have several devices and one of them going away
 doesn't mean they stopped looking.
 
+Emptying the canvas drops what is unseen on it as well, since the emoji a push
+would name are gone. Both ways of emptying it count — the nightly clear, and a
+user taking the last placement off — the same two the saved-canvas snapshot
+treats alike.
+
 This leans on a connection meaning someone is actually looking, which is why the
 client hangs up when it goes to the background (below). It is still a proxy: a
 device that loses the network without closing cleanly stays "connected" until the
 socket does, and placements in that window are never notified.
 
 **Wiring — `server/main.py`.** `POST /deviceNotificationToken` registers a device, and
-`canvas_handler` reports connects, disconnects, and new placements to the notifier.
+`canvas_handler` reports connects, disconnects, new placements, and an emptied
+canvas to the notifier, as does the nightly clear.
 
 Comparing states rather than reading the actions keeps
 `DistributedStateMachineServer` untouched, and means the cases that shouldn't

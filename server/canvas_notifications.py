@@ -5,7 +5,7 @@ from functools import cache
 
 from apple_notifications import send_push
 from canvas_types import Placement
-from users import other_user_ids_sharing_canvas
+from users import other_user_ids_sharing_canvas, user_configs_by_user_id
 
 
 @dataclass(kw_only=True, frozen=True)
@@ -52,6 +52,15 @@ class PlacementNotifier:
             key: emojis
             for key, emojis in self.unseen_emojis_by_key.items()
             if key.recipient_user_id != user_id
+        }
+
+    # the emoji are gone, so naming them in a push would be describing a canvas that no
+    # longer exists
+    def canvas_cleared(self, *, canvas_id: str):
+        self.unseen_emojis_by_key = {
+            key: emojis
+            for key, emojis in self.unseen_emojis_by_key.items()
+            if user_configs_by_user_id[key.recipient_user_id].canvas_id != canvas_id
         }
 
     def disconnected(self, *, user_id: str):

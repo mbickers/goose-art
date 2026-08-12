@@ -68,6 +68,7 @@ async def clear_canvases_daily():
             if canvas.state:
                 save_canvas(canvas_id=canvas_id, placements=canvas.state)
             canvas.reset()
+            placement_notifier().canvas_cleared(canvas_id=canvas_id)
         print(f"cleared canvases at {datetime.now(clear_timezone)}")
 
 
@@ -167,6 +168,7 @@ async def canvas_handler(
             # off the canvas empties it just as a clear does
             if before and not canvas.state:
                 save_canvas(canvas_id=canvas_id, placements=before)
+                placement_notifier().canvas_cleared(canvas_id=canvas_id)
 
             placement_notifier().placed(
                 placer_user_id=user_id,
