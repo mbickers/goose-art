@@ -119,7 +119,7 @@ def apns_client(*, use_sandbox: bool) -> APNs | None:
     )
 
 
-async def send_push(*, user_id: str, body: str):
+async def send_push(*, user_id: str, body: str, collapse_id: str):
     client = apns_client(
         use_sandbox=user_configs_by_user_id[user_id].use_sandbox_notifications
     )
@@ -135,17 +135,16 @@ async def send_push(*, user_id: str, body: str):
             client.send_notification(
                 NotificationRequest(
                     device_token=device_notification_token,
-                    # passive because a coalesced batch can arrive seconds after the
-                    # user already watched it land on the canvas: it goes into the
-                    # notification list without a sound or waking the screen, so a
-                    # stale one costs an entry to clear rather than an interruption.
-                    # it also rules out a sound, so there is no "sound" key to set
+                    # a placement is worth seeing but not worth interrupting for, so it
+                    # goes into the notification list without a sound or waking the
+                    # screen. passive rules out a sound, so there is no key to set
                     message={
                         "aps": {
                             "alert": {"body": body},
                             "interruption-level": "passive",
                         }
                     },
+                    collapse_key=collapse_id,
                     push_type=PushType.ALERT,
                 )
             )

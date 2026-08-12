@@ -1,18 +1,13 @@
 import asyncio
-from collections.abc import Coroutine
+from collections import Counter
 from dataclasses import dataclass
 from functools import cache
-from typing import Any, Protocol
 
 from apple_notifications import send_push
 from canvas_types import Placement
-
-# long enough that dropping a handful of emoji in one sitting arrives as a single push,
-# short enough that a placement is still recent news when the phone buzzes
-placement_coalesce_delay = 15.0
+from users import other_user_ids_sharing_canvas
 
 
-# one key per pair, so each recipient batches on their own window rather than sharing one
 @dataclass(kw_only=True, frozen=True)
 class PlacementNotificationKey:
     placer_user_id: str
@@ -32,43 +27,60 @@ def placed_emojis(*, before: list[Placement], after: list[Placement]) -> list[st
     ]
 
 
-class CoalescedFlush[Key, Event](Protocol):
-    def __call__(self, *, key: Key, events: list[Event]) -> Coroutine[Any, Any, None]:
-        pass
+# a placement notifies immediately, and the push names every emoji the recipient has not
+# seen from that placer rather than only the ones that just landed. the collapse id makes
+# each send replace the last, so a burst reads as one notification whose body grows
+# instead of a stack of them — which is what waiting on a timer used to buy, without the
+# notification arriving after the user has already watched the emoji appear.
+#
+# a recipient with a live connection is being served the canvas as it changes, so nothing
+# placed while they are connected is unseen in the first place.
+class PlacementNotifier:
+    def __init__(self):
+        # counted rather than a flag because a user can have more than one device, and
+        # one of them going away doesn't mean they stopped looking
+        self.connection_counts_by_user_id: Counter[str] = Counter()
+        self.unseen_emojis_by_key: dict[PlacementNotificationKey, list[str]] = {}
+        # held so that in-flight sends aren't garbage collected
+        self.send_tasks: set[asyncio.Task] = set()
 
+    # a connection is served the whole canvas on subscribe, which shows everything
+    # outstanding at once, so none of it is still unseen
+    def connected(self, *, user_id: str):
+        self.connection_counts_by_user_id[user_id] += 1
+        self.unseen_emojis_by_key = {
+            key: emojis
+            for key, emojis in self.unseen_emojis_by_key.items()
+            if key.recipient_user_id != user_id
+        }
 
-# batches events sharing a key into one flush. the window is anchored at the first event
-# of a batch rather than extended by later ones, so a steady stream of events still
-# delivers on a bounded delay instead of being held back indefinitely.
-class Coalescer[Key, Event]:
-    def __init__(self, *, delay: float, flush: CoalescedFlush[Key, Event]):
-        self.delay = delay
-        self.flush = flush
-        self.pending_events: dict[Key, list[Event]] = {}
-        # held so that in-flight batches aren't garbage collected mid-wait
-        self.flush_tasks: dict[Key, asyncio.Task] = {}
+    def disconnected(self, *, user_id: str):
+        self.connection_counts_by_user_id[user_id] -= 1
+        if self.connection_counts_by_user_id[user_id] <= 0:
+            del self.connection_counts_by_user_id[user_id]
 
-    def add(self, *, key: Key, event: Event):
-        if key in self.pending_events:
-            self.pending_events[key].append(event)
+    def placed(self, *, placer_user_id: str, emojis: list[str]):
+        if not emojis:
             return
-        self.pending_events[key] = [event]
-        self.flush_tasks[key] = asyncio.create_task(self.flush_after_delay(key=key))
-
-    async def flush_after_delay(self, *, key: Key):
-        await asyncio.sleep(self.delay)
-        events = self.pending_events.pop(key)
-        del self.flush_tasks[key]
-        await self.flush(key=key, events=events)
-
-
-async def flush_placements(*, key: PlacementNotificationKey, events: list[str]):
-    await send_push(
-        user_id=key.recipient_user_id,
-        body=f"{key.placer_user_id} placed {''.join(events)}",
-    )
+        for recipient_user_id in sorted(other_user_ids_sharing_canvas(placer_user_id)):
+            if recipient_user_id in self.connection_counts_by_user_id:
+                continue
+            key = PlacementNotificationKey(
+                placer_user_id=placer_user_id, recipient_user_id=recipient_user_id
+            )
+            unseen_emojis = self.unseen_emojis_by_key.get(key, []) + emojis
+            self.unseen_emojis_by_key[key] = unseen_emojis
+            task = asyncio.create_task(
+                send_push(
+                    user_id=recipient_user_id,
+                    body=f"{placer_user_id} placed {''.join(unseen_emojis)}",
+                    collapse_id=f"{placer_user_id}:{recipient_user_id}",
+                )
+            )
+            self.send_tasks.add(task)
+            task.add_done_callback(self.send_tasks.discard)
 
 
 @cache
-def notification_coalescer() -> Coalescer[PlacementNotificationKey, str]:
-    return Coalescer(delay=placement_coalesce_delay, flush=flush_placements)
+def placement_notifier() -> PlacementNotifier:
+    return PlacementNotifier()

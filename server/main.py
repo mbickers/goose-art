@@ -19,11 +19,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from apple_notifications import apns_config, device_notification_token_registry
-from canvas_notifications import (
-    PlacementNotificationKey,
-    notification_coalescer,
-    placed_emojis,
-)
+from canvas_notifications import placed_emojis, placement_notifier
 from canvas_types import (
     Action,
     Placement,
@@ -36,7 +32,7 @@ from distributed_state_machine import (
     deserialize_client_message,
     serialize_server_message,
 )
-from users import other_user_ids_sharing_canvas, user_configs_by_user_id
+from users import user_configs_by_user_id
 
 type CanvasServer = DistributedStateMachineServer[list[Placement], Action]
 
@@ -153,13 +149,7 @@ async def canvas_handler(
         )
         asyncio.create_task(websocket.send_json(msg))
 
-    notification_keys = [
-        PlacementNotificationKey(
-            placer_user_id=user_id, recipient_user_id=recipient_user_id
-        )
-        for recipient_user_id in sorted(other_user_ids_sharing_canvas(user_id))
-    ]
-
+    placement_notifier().connected(user_id=user_id)
     unsubscribe = canvas.subscribe(canvas_subscriber, call_on_subscribe=True)
     try:
         while True:
@@ -178,13 +168,15 @@ async def canvas_handler(
             if before and not canvas.state:
                 save_canvas(canvas_id=canvas_id, placements=before)
 
-            for emoji in placed_emojis(before=before, after=canvas.state):
-                for key in notification_keys:
-                    notification_coalescer().add(key=key, event=emoji)
+            placement_notifier().placed(
+                placer_user_id=user_id,
+                emojis=placed_emojis(before=before, after=canvas.state),
+            )
     except WebSocketDisconnect:
         pass
     finally:
         unsubscribe()
+        placement_notifier().disconnected(user_id=user_id)
 
 
 class DeviceNotificationTokenBody(BaseModel):

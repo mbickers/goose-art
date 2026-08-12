@@ -7,6 +7,8 @@ struct GooseArtApp: App {
     @UIApplicationDelegateAdaptor(PushNotificationDelegate.self)
     private var pushNotificationDelegate
 
+    @Environment(\.scenePhase) private var scenePhase
+
     @State private var authenticationService = AuthenticationService(
         baseURL: URL(string: "https://goose-art.maxbickers.com")
     )
@@ -34,6 +36,18 @@ struct GooseArtApp: App {
                     authenticationService.receivedDeviceNotificationToken(
                         deviceNotificationToken
                     )
+                }
+            }
+            // inactive is left out on purpose: it is what the app switcher and a pulled
+            // down notification center look like, and the canvas is still on screen
+            .onChange(of: scenePhase) { _, newScenePhase in
+                switch newScenePhase {
+                case .active:
+                    authenticationService.enteredForeground()
+                case .background:
+                    authenticationService.enteredBackground()
+                default:
+                    break
                 }
             }
         }

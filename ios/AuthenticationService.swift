@@ -148,6 +148,18 @@ class AuthenticationService {
         )
     }
 
+    // the server reads a live canvas connection as the user watching placements land, and
+    // so notifies them of nothing while one is open. a suspended app can hold its socket
+    // open long after the user stopped looking, so the connection follows the scene
+    // rather than the session
+    func enteredForeground() {
+        canvasConnection?.connect()
+    }
+
+    func enteredBackground() {
+        canvasConnection?.disconnect()
+    }
+
     func logout(reason: String? = nil) {
         canvasConnection?.disconnect()
         canvasConnection = nil

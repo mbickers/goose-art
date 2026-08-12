@@ -45,7 +45,14 @@ class AuthenticatedWebSocket<Inbound: Decodable, Outbound: Encodable> {
         self.request = request
 
         self.onAuthenticationFailed = onAuthenticationFailed
-        connectionTask = Task { await connect() }
+        connect()
+    }
+
+    // a no-op while already connected, so that a repeated scene phase change doesn't
+    // leave a second socket running alongside the first
+    func connect() {
+        guard connectionTask == nil else { return }
+        connectionTask = Task { await maintainConnection() }
     }
 
     // the connection task retains this connection, so without an explicit teardown it
@@ -57,7 +64,7 @@ class AuthenticatedWebSocket<Inbound: Decodable, Outbound: Encodable> {
         socket = nil
     }
 
-    private func connect() async {
+    private func maintainConnection() async {
         while !Task.isCancelled {
             let socket = URLSession.shared.webSocketTask(with: request)
             socket.resume()
