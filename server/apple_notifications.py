@@ -135,7 +135,17 @@ async def send_push(*, user_id: str, body: str):
             client.send_notification(
                 NotificationRequest(
                     device_token=device_notification_token,
-                    message={"aps": {"alert": {"body": body}, "sound": "default"}},
+                    # passive because a coalesced batch can arrive seconds after the
+                    # user already watched it land on the canvas: it goes into the
+                    # notification list without a sound or waking the screen, so a
+                    # stale one costs an entry to clear rather than an interruption.
+                    # it also rules out a sound, so there is no "sound" key to set
+                    message={
+                        "aps": {
+                            "alert": {"body": body},
+                            "interruption-level": "passive",
+                        }
+                    },
                     push_type=PushType.ALERT,
                 )
             )

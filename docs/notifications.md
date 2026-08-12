@@ -1,7 +1,9 @@
 # Push notifications
 
 You get a push like `brian placed 🦆🎨🐛` when someone else places emoji on a canvas
-you share. Placements are batched so a burst arrives as one notification.
+you share. Placements are batched so a burst arrives as one notification, and it
+is delivered passively — into the notification list, without a sound or waking
+the screen.
 
 ## Setup (one time, by hand)
 
@@ -46,7 +48,9 @@ needs no credentials.
   previous user's notifications.
 - `send_push(user_id:, body:)` sends to one user's devices, through the APNs
   environment that user is configured for, and drops tokens APNs rejects
-  permanently.
+  permanently. Sends are `passive`, because the batch is coalesced and so can
+  land seconds after the user already watched the placement appear: an
+  interruption would be for news they have had for a while.
 
 **Everything else — `server/canvas_notifications.py`.** What to say and when to
 say it. `placed_emojis` compares the canvas before and after a message and reports

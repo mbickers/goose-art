@@ -80,4 +80,11 @@ private class PushNotificationDelegate: NSObject, UIApplicationDelegate,
     ) async -> UNNotificationPresentationOptions {
         []
     }
+
+    // for the same reason, one delivered while the app was away has been overtaken by
+    // the canvas the user is now looking at, so it is cleared rather than left to pile
+    // up. nothing arrives while foregrounded to clear, since willPresent drops those
+    func applicationDidBecomeActive(_ application: UIApplication) {
+        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+    }
 }
