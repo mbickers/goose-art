@@ -41,6 +41,10 @@ private func lastEmojiInString(_ string: String) -> Emoji? {
 // moves (keyframes), which SwiftUI has no single mechanism for
 private let placementSpring = Spring(duration: 0.3, bounce: 0.45)
 
+// minimum is an EmojiButton's 60 plus the 6 its border adds, so a column is never
+// wide enough for a button it can't actually fit
+private let paletteColumns = [GridItem(.adaptive(minimum: 66), spacing: 4)]
+
 struct CanvasView: View {
     let placementService: DistributedStateMachineClient<[Placement], CanvasAction>
     let userId: String
@@ -219,7 +223,6 @@ struct CanvasView: View {
 
             TextField("", text: $emojiFieldValue)
                 .focused($emojiFieldFocused)
-                .onAppear { emojiFieldFocused = true }
                 .multilineTextAlignment(.center)
                 .onChange(of: emojiFieldValue) {
                     oldValue,
@@ -276,85 +279,88 @@ struct CanvasView: View {
 
     var body: some View {
         ZStack {
-            VStack(spacing: 10) {
-                ZStack {
-                    Rectangle()
-                        .fill(Palette.blue)
+            // the whole page scrolls, so the palette grid can run off the bottom;
+            // scrolling is off during a drag so the canvas can't move out from
+            // under the placement being dropped onto it
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 10) {
+                    ZStack {
+                        Rectangle()
+                            .fill(Palette.blue)
 
-                    if let canvasFrame {
-                        ForEach(
-                            placementService.state,
-                            id: \.id
+                        if let canvasFrame {
+                            ForEach(
+                                placementService.state,
+                                id: \.id
+                            ) {
+                                placement in
+                                let placementIsBeingDragged =
+                                    activePlacementState?.placement.id == placement.id
+                                placementGlyph(placement, canvasFrame: canvasFrame)
+                                    .gesture(
+                                        makePickupGesture(placement: placement)
+                                    )
+                                    .opacity(placementIsBeingDragged ? 0.1 : 1)
+                                    .transition(
+                                        AnyTransition.scale(scale: 1.25).combined(with: .opacity)
+                                    )
+                                    .position(
+                                        placement.position * canvasFrame.height
+                                    )
+                            }
+                        }
+
+                        // Sibling of the glyphs rather than a modifier on this ZStack:
+                        // a gesture on an ancestor of the glyph holding the active drag
+                        // competes with it for the same touch instead of taking the
+                        // second finger, and the drag then never ends. Layering it on
+                        // top also stops a second finger from picking up another emoji.
+                        if activePlacementState != nil {
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .gesture(secondTouchGesture)
+                        }
+                    }
+                    // animate (only) new placements
+                    .animation(
+                        .spring(placementSpring),
+                        value: Set(placementService.state.map(\.id))
+                    )
+                    .onGeometryChange(
+                        for: CGRect.self,
+                        of: { geometry in geometry.frame(in: .global) },
+                        action: { frame in canvasFrame = frame }
+                    )
+                    .modifier(RoundedBorder(cornerRadius: 20, lineWidth: 6))
+                    .aspectRatio(1, contentMode: .fit)
+                    .frame(maxWidth: .infinity, maxHeight: 500)
+
+                    HStack(spacing: 10) {
+                        CustomButton(
+                            content: .icon(
+                                systemName:
+                                    "arrow.left.and.right.righttriangle.left.righttriangle.right"
+                            ),
+                            enabled: activePlacementState != nil
                         ) {
-                            placement in
-                            let placementIsBeingDragged =
-                                activePlacementState?.placement.id == placement.id
-                            placementGlyph(placement, canvasFrame: canvasFrame)
-                                .gesture(
-                                    makePickupGesture(placement: placement)
+                            if let dragState = activePlacementState {
+                                activePlacementState = dragState.with(
+                                    placement: dragState.placement.with(
+                                        isMirrored: !dragState.placement.isMirrored
+                                    )
                                 )
-                                .opacity(placementIsBeingDragged ? 0.1 : 1)
-                                .transition(
-                                    AnyTransition.scale(scale: 1.25).combined(with: .opacity)
-                                )
-                                .position(
-                                    placement.position * canvasFrame.height
-                                )
+                            }
+                        }
+
+                        CustomButton(
+                            content: .icon(systemName: "gearshape"),
+                            enabled: activePlacementState == nil
+                        ) {
+                            showingSettings = true
                         }
                     }
 
-                    // Sibling of the glyphs rather than a modifier on this ZStack:
-                    // a gesture on an ancestor of the glyph holding the active drag
-                    // competes with it for the same touch instead of taking the
-                    // second finger, and the drag then never ends. Layering it on
-                    // top also stops a second finger from picking up another emoji.
-                    if activePlacementState != nil {
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .gesture(secondTouchGesture)
-                    }
-                }
-                // animate (only) new placements
-                .animation(
-                    .spring(placementSpring),
-                    value: Set(placementService.state.map(\.id))
-                )
-                .onGeometryChange(
-                    for: CGRect.self,
-                    of: { geometry in geometry.frame(in: .global) },
-                    action: { frame in canvasFrame = frame }
-                )
-                .modifier(RoundedBorder(cornerRadius: 20, lineWidth: 6))
-                .frame(maxWidth: .infinity)
-                .aspectRatio(1, contentMode: .fit)
-
-                HStack(spacing: 10) {
-                    CustomButton(
-                        content: .icon(
-                            systemName:
-                                "arrow.left.and.right.righttriangle.left.righttriangle.right"
-                        ),
-                        enabled: activePlacementState != nil
-                    ) {
-                        if let dragState = activePlacementState {
-                            activePlacementState = dragState.with(
-                                placement: dragState.placement.with(
-                                    isMirrored: !dragState.placement.isMirrored
-                                )
-                            )
-                        }
-                    }
-
-                    CustomButton(
-                        content: .icon(systemName: "gearshape"),
-                        enabled: activePlacementState == nil
-                    ) {
-                        showingSettings = true
-                    }
-                }
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack {
+                    LazyVGrid(columns: paletteColumns, spacing: 4) {
                         // dimmed rather than disabled: the drag being dimmed for
                         // starts here, and disabling would cancel it mid-gesture
                         let dimmed = activePlacementState != nil
@@ -371,9 +377,9 @@ struct CanvasView: View {
                                 .modifier(EmojiButton(color: Palette.pink, dimmed: dimmed))
                         }
                     }
-                }
-                .scrollClipDisabled()
-            }.padding()
+                }.padding()
+            }
+            .scrollDisabled(activePlacementState != nil)
 
             if let dragState = activePlacementState, let canvasFrame {
                 placementGlyph(dragState.placement, canvasFrame: canvasFrame)

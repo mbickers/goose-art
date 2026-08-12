@@ -19,7 +19,7 @@ import SwiftUI
     func emojiUsed(_ emoji: Emoji) {
         recentEmojis.removeAll { $0 == emoji }
         recentEmojis.insert(emoji, at: 0)
-        recentEmojis = Array(recentEmojis.prefix(10))
+        recentEmojis = Array(recentEmojis.prefix(100))
         UserDefaults.standard.set(
             try! JSONEncoder().encode(recentEmojis),
             forKey: "recentEmojis"
