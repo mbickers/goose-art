@@ -176,18 +176,13 @@ struct CanvasView: View {
             let currentOffset =
                 currentCanvasPoint - dragState.placement.position
 
-            // how far the second finger has to travel to scale the placement, and the
-            // floor on where it started from, so that a second touch landing on the
-            // placement itself doesn't divide by ~0
-            let clampedInitialOffsetNorm = max(
-                secondTouchState.initialOffset
-                    .norm(),
-                0.01
-            )
             let clampedScale =
                 (secondTouchState.baseScale
-                * currentOffset.norm()
-                / clampedInitialOffsetNorm).clamped(
+                + 2
+                * (currentOffset.norm()
+                    - secondTouchState.initialOffset
+                    .norm()))
+                .clamped(
                     to: Placement.scaleRange
                 )
 
