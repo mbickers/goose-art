@@ -148,9 +148,6 @@ struct CanvasView: View {
         )
         .onChanged { value in
             guard let dragState = activePlacementState,
-                let startCanvasPoint = toCanvasPoint(
-                    screenPoint: value.startLocation
-                ),
                 let currentCanvasPoint = toCanvasPoint(
                     screenPoint: value.location
                 )
@@ -161,9 +158,13 @@ struct CanvasView: View {
                 let secondTouchState = dragState
                     .secondTouchState
             else {
+                // anchors on where the finger is now rather than value.startLocation:
+                // the gesture's minimumDistance means it has already travelled by the
+                // first callback, and anchoring behind it makes scale and rotation
+                // jump by that much the instant the second touch registers
                 self.activePlacementState = dragState.with(
                     secondTouchState: SecondTouchState(
-                        initialOffset: startCanvasPoint
+                        initialOffset: currentCanvasPoint
                             - dragState.placement.position,
                         baseScale: dragState.placement.scale,
                         baseRotation: dragState.placement.rotation
@@ -185,7 +186,7 @@ struct CanvasView: View {
             )
             let clampedScale =
                 (secondTouchState.baseScale
-                * 1.5 * currentOffset.norm()
+                * currentOffset.norm()
                 / clampedInitialOffsetNorm).clamped(
                     to: Placement.scaleRange
                 )
