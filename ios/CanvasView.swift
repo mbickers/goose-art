@@ -58,6 +58,8 @@ struct CanvasView: View {
     @State private var activePlacementState: ActivePlacementState? = nil
     @State private var canvasFrame: CGRect? = nil
     @State private var showingSettings = false
+    // 17 is the system body size, and @ScaledMetric tracks it through Dynamic Type
+    @ScaledMetric(relativeTo: .body) private var textPointSize: CGFloat = 17
     @AppStorage(MessageSound.enabledDefaultsKey) private var soundEffectsEnabled = true
 
     // two coordinate systems meet here: screen points, which is what gestures report in
@@ -122,6 +124,32 @@ struct CanvasView: View {
     // reuses the placement's id so that dropping it upserts rather than duplicates
     private func makePickupGesture(placement: Placement) -> some Gesture {
         return makeDragGesture(source: .canvas, makePlacement: { _ in placement })
+    }
+
+    // a system drag carries one point and nothing else — UIDragDropSession exposes only
+    // location(in:), with no scale, rotation, or second touch — so a dropped emoji lands
+    // upright and unmirrored, and the user resizes it afterwards like any other placement.
+    // Nor is the dragged glyph's own size reported (DropSession.size is this view's), so
+    // it arrives at the body text height it was most likely dragged out of, which on a
+    // canvas this large is already the smallest scale a placement is allowed.
+    private func dropEmoji(from strings: [String], session: DropSession) {
+        guard let emoji = strings.compactMap(lastEmojiInString).last else { return }
+
+        placementService.apply(
+            .upsert(
+                placement: Placement(
+                    emoji: emoji,
+                    position: session.location.safeDivide(session.size.width),
+                    scale: (textPointSize / session.size.height).clamped(
+                        to: Placement.scaleRange
+                    ),
+                    rotation: 0,
+                    isMirrored: false,
+                    id: UUID().uuidString
+                )
+            )
+        )
+        recentEmojisStore.emojiUsed(emoji)
     }
 
     private func dropActivePlacement() {
@@ -331,6 +359,11 @@ struct CanvasView: View {
                         of: { geometry in geometry.frame(in: .global) },
                         action: { frame in canvasFrame = frame }
                     )
+                    // sits with .onGeometryChange, above the border's padding, so that a
+                    // drop's local coordinates are the same space the glyphs are placed in
+                    .dropDestination(for: String.self) { strings, session in
+                        dropEmoji(from: strings, session: session)
+                    }
                     .modifier(RoundedBorder(cornerRadius: 20, lineWidth: 6))
                     .aspectRatio(1, contentMode: .fit)
                     .frame(maxWidth: .infinity, maxHeight: 500)
