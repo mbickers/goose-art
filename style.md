@@ -3,7 +3,10 @@
 ## Formatting is automated, so nothing below is about whitespace
 
 `./format.sh` formats and lints everything — ruff for Python, swift-format for
-Swift — or `./format.sh <files>` for specific ones. The pre-commit hook in
+Swift — or `./format.sh <files>` for specific ones. Always go through it rather
+than invoking ruff or swift-format yourself: it owns the tool versions, config
+paths, and flags, so a direct call can disagree with what the hook does. The
+pre-commit hook in
 `.githooks/pre-commit` runs it on staged files and restages the result, so
 formatting never reaches a review. Point git at it once per clone:
 
