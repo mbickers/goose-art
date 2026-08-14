@@ -109,15 +109,24 @@ extension Placement {
     }
 }
 
+struct CanvasState: Codable, Equatable {
+    let title: String
+    let placements: [Placement]
+
+    static let empty = CanvasState(title: "", placements: [])
+}
+
 enum CanvasAction: Codable {
     case clear
     case remove(placementId: String)
+    case setTitle(title: String)
     case upsert(placement: Placement)
 
     private enum CodingKeys: String, CodingKey {
         case type
         case placement
         case placementId
+        case title
     }
 
     init(from decoder: Decoder) throws {
@@ -131,6 +140,9 @@ enum CanvasAction: Codable {
         case "remove":
             let placementId = try container.decode(String.self, forKey: .placementId)
             self = .remove(placementId: placementId)
+        case "setTitle":
+            let title = try container.decode(String.self, forKey: .title)
+            self = .setTitle(title: title)
         case "clear":
             self = .clear
         default:
@@ -152,24 +164,35 @@ enum CanvasAction: Codable {
         case .remove(let placementId):
             try container.encode("remove", forKey: .type)
             try container.encode(placementId, forKey: .placementId)
+        case .setTitle(let title):
+            try container.encode("setTitle", forKey: .type)
+            try container.encode(title, forKey: .title)
         case .clear:
             try container.encode("clear", forKey: .type)
         }
     }
 }
 
-func reduceCanvas(state: [Placement], action: CanvasAction) -> [Placement] {
+func reduceCanvas(state: CanvasState, action: CanvasAction) -> CanvasState {
     switch action {
     case .clear:
-        return []
+        return .empty
     case .remove(let placementId):
-        return state.filter { placement in
-            placement.id != placementId
-        }
+        return CanvasState(
+            title: state.title,
+            placements: state.placements.filter { placement in
+                placement.id != placementId
+            }
+        )
+    case .setTitle(let title):
+        return CanvasState(title: title, placements: state.placements)
     case .upsert(let newPlacement):
         // an upserted placement moves to the top of the z-order
-        return state.filter { placement in
-            placement.id != newPlacement.id
-        } + [newPlacement]
+        return CanvasState(
+            title: state.title,
+            placements: state.placements.filter { placement in
+                placement.id != newPlacement.id
+            } + [newPlacement]
+        )
     }
 }

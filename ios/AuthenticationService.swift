@@ -4,7 +4,7 @@ import UserNotifications
 
 enum AuthenticationState {
     case authenticated(
-        canvasService: DistributedStateMachineClient<[Placement], CanvasAction>,
+        canvasService: DistributedStateMachineClient<CanvasState, CanvasAction>,
         userId: String
     )
     case unauthenticated(reason: String?)
@@ -28,22 +28,25 @@ private func localStateKey(token: String) -> String {
     return "canvasLocalState-\(hex.prefix(16))"
 }
 
+// local state that fails to decode — written by an older version of the app, say — is
+// discarded rather than crashing: the device starts empty and the server's copy replaces
+// it on connect
 private func loadLocalState(
     token: String
-) -> DistributedStateMachineLocalState<[Placement], CanvasAction>? {
+) -> DistributedStateMachineLocalState<CanvasState, CanvasAction>? {
     guard
         let data = UserDefaults.standard.data(
             forKey: localStateKey(token: token)
         )
     else { return nil }
     return try? JSONDecoder().decode(
-        DistributedStateMachineLocalState<[Placement], CanvasAction>.self,
+        DistributedStateMachineLocalState<CanvasState, CanvasAction>.self,
         from: data
     )
 }
 
 private func saveLocalState(
-    _ localState: DistributedStateMachineLocalState<[Placement], CanvasAction>,
+    _ localState: DistributedStateMachineLocalState<CanvasState, CanvasAction>,
     token: String
 ) {
     UserDefaults.standard.set(
@@ -56,7 +59,7 @@ private func saveLocalState(
 class AuthenticationService {
     private let baseURL: URL?
     private var canvasConnection:
-        AuthenticatedWebSocket<ServerMessage<[Placement]>, ClientMessage<CanvasAction>>?
+        AuthenticatedWebSocket<ServerMessage<CanvasState>, ClientMessage<CanvasAction>>?
 
     var state: AuthenticationState = .unauthenticated(reason: nil)
 
@@ -104,7 +107,7 @@ class AuthenticationService {
         SessionStore.save(session)
 
         let connection = baseURL.map { baseURL in
-            AuthenticatedWebSocket<ServerMessage<[Placement]>, ClientMessage<CanvasAction>>(
+            AuthenticatedWebSocket<ServerMessage<CanvasState>, ClientMessage<CanvasAction>>(
                 baseURL: baseURL,
                 path: "canvas",
                 queryItems: [URLQueryItem(name: "deviceId", value: deviceId())],
@@ -122,7 +125,7 @@ class AuthenticationService {
         state = .authenticated(
             canvasService: DistributedStateMachineClient(
                 localState: loadLocalState(token: token)
-                    ?? DistributedStateMachineLocalState(initialState: []),
+                    ?? DistributedStateMachineLocalState(initialState: .empty),
                 reduce: reduceCanvas(state:action:),
                 connection: connection,
                 persistState: { localState in
@@ -132,12 +135,12 @@ class AuthenticationService {
                 // state immediately, so by the time the server echoes one back it is in
                 // both the before and after state. a placement id that is new here was
                 // made on some other device
-                onServerUpdate: { previousPlacements, placements, isFirstUpdateOfSession in
+                onServerUpdate: { previousCanvas, canvas, isFirstUpdateOfSession in
                     // what was already on the canvas when the session opened isn't an
                     // arrival, so logging in to a canvas full of emoji stays quiet
                     guard !isFirstUpdateOfSession else { return }
-                    let previousIds = Set(previousPlacements.map(\.id))
-                    if placements.contains(where: { placement in
+                    let previousIds = Set(previousCanvas.placements.map(\.id))
+                    if canvas.placements.contains(where: { placement in
                         !previousIds.contains(placement.id)
                     }) {
                         MessageSound.playIfForeground()

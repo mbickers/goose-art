@@ -169,6 +169,39 @@ the end of the line:
 let baseRotation: CGFloat  // radians
 ```
 
+## Comments and docs describe the code as it stands
+
+Whoever reads a comment is looking at the code it sits above, and whoever reads
+a doc is following it today. Both want to know what is there — not the route
+that produced it. "We used to…", "this changed when…", or a rule introduced by
+naming the first change that needed it all hand the reader a timeline they
+can't see and don't need. Git history is where that belongs.
+
+```md
+<!-- bad — the rule arrives wrapped in a change the reader has to already know -->
+Saved canvases are untracked too, so a change to their format has to be applied
+on the droplet after the deploy that introduced it. Titles were the first:
+
+<!-- good — the same rule, and still true of the next format change -->
+Saved canvases are untracked too, so a change to the format they are written in
+has to be migrated on the droplet by hand after the deploy that changed it.
+```
+
+Code that has to survive data an older version wrote is the one place the past
+is worth mentioning at all, and even there it is the general property that keeps
+the code honest. An old version can appear as an example; it isn't the subject.
+
+```swift
+// bad — only a reader who remembers that change can tell what this protects against
+// a canvas written by a build from before canvases had titles is a bare array of
+// placements, which fails to decode here
+
+// good — says what the code guarantees, whatever wrote the state
+// local state that fails to decode — written by an older version of the app, say — is
+// discarded rather than crashing: the device starts empty and the server's copy replaces
+// it on connect
+```
+
 ## Avoid ViewBuilder-style trailing closures for our own functions
 
 Trailing-closure syntax hides the parameter label, which is exactly the

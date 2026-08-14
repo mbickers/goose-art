@@ -22,9 +22,9 @@ from apple_notifications import apns_config, device_notification_token_registry
 from canvas_notifications import placed_emojis, placement_notifier
 from canvas_types import (
     Action,
-    Placement,
+    CanvasState,
     action_from_json,
-    placements_to_json,
+    empty_canvas,
     reduce_canvas,
 )
 from distributed_state_machine import (
@@ -34,7 +34,7 @@ from distributed_state_machine import (
 )
 from users import user_configs_by_user_id
 
-type CanvasServer = DistributedStateMachineServer[list[Placement], Action]
+type CanvasServer = DistributedStateMachineServer[CanvasState, Action]
 
 clear_timezone = ZoneInfo("America/New_York")
 clear_time = time(hour=2)
@@ -51,22 +51,20 @@ def seconds_until_next_clear(now: datetime) -> float:
     return (next_clear - now).total_seconds()
 
 
-def save_canvas(*, canvas_id: str, placements: list[Placement]):
+def save_canvas(*, canvas_id: str, state: CanvasState):
     path = (
         saved_canvases_path / canvas_id / f"{datetime.now(UTC):%Y-%m-%dT%H-%M-%SZ}.json"
     )
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(placements_to_json(placements), indent=2, ensure_ascii=False)
-    )
+    path.write_text(json.dumps(state.to_json(), indent=2, ensure_ascii=False))
 
 
 async def clear_canvases_daily():
     while True:
         await asyncio.sleep(seconds_until_next_clear(datetime.now(clear_timezone)))
         for canvas_id, canvas in canvas_servers_by_canvas_id().items():
-            if canvas.state:
-                save_canvas(canvas_id=canvas_id, placements=canvas.state)
+            if canvas.state.placements:
+                save_canvas(canvas_id=canvas_id, state=canvas.state)
             canvas.reset()
             placement_notifier().canvas_cleared(canvas_id=canvas_id)
         print(f"cleared canvases at {datetime.now(clear_timezone)}")
@@ -103,7 +101,7 @@ def user_ids_by_token() -> dict[str, str]:
 def canvas_servers_by_canvas_id() -> dict[str, CanvasServer]:
     return {
         user_config.canvas_id: DistributedStateMachineServer(
-            initial_state=[], reduce=reduce_canvas
+            initial_state=empty_canvas(), reduce=reduce_canvas
         )
         for user_config in user_configs_by_user_id.values()
     }
@@ -138,7 +136,7 @@ async def canvas_handler(
 
     def canvas_subscriber(
         *,
-        state: list[Placement],
+        state: CanvasState,
         greatest_seen_device_sequence_numbers: dict[str, int],
     ):
         msg = serialize_server_message(
@@ -146,7 +144,7 @@ async def canvas_handler(
             greatest_seen_device_sequence_number=greatest_seen_device_sequence_numbers.get(
                 device_id, 0
             ),
-            serialize_state=placements_to_json,
+            serialize_state=CanvasState.to_json,
         )
         asyncio.create_task(websocket.send_json(msg))
 
@@ -166,13 +164,15 @@ async def canvas_handler(
             # comparing before and after rather than reading the actions: a clear a
             # reconnecting client resent changes nothing, and taking the last placement
             # off the canvas empties it just as a clear does
-            if before and not canvas.state:
-                save_canvas(canvas_id=canvas_id, placements=before)
+            if before.placements and not canvas.state.placements:
+                save_canvas(canvas_id=canvas_id, state=before)
                 placement_notifier().canvas_cleared(canvas_id=canvas_id)
 
             placement_notifier().placed(
                 placer_user_id=user_id,
-                emojis=placed_emojis(before=before, after=canvas.state),
+                emojis=placed_emojis(
+                    before=before.placements, after=canvas.state.placements
+                ),
             )
     except WebSocketDisconnect:
         pass
@@ -213,7 +213,7 @@ async def inspect_canvas(authorization: Annotated[str | None, Header()] = None):
         raise HTTPException(status_code=401)
     canvas = canvas_servers_by_canvas_id()[user_configs_by_user_id[user_id].canvas_id]
     data = {
-        "placements": placements_to_json(canvas.state),
+        **canvas.state.to_json(),
         "greatestSeenDeviceSequenceNumbers": canvas.greatest_seen_device_sequence_numbers,
     }
     return Response(

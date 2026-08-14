@@ -19,7 +19,7 @@ struct GooseArtApp: App {
                 switch authenticationService.state {
                 case .authenticated(let canvasService, let userId):
                     CanvasView(
-                        placementService: canvasService,
+                        canvasService: canvasService,
                         userId: userId,
                         logout: { authenticationService.logout() }
                     )
