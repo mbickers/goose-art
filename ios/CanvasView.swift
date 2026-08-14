@@ -1,9 +1,6 @@
+import ObjectiveC
 import SwiftUI
 import UIKit
-
-#if DEBUG
-    import ObjectiveC
-#endif
 
 private struct SecondTouchState {
     let initialOffset: CGPoint
@@ -122,9 +119,6 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
         _ interaction: UIDropInteraction,
         canHandle session: any UIDropSession
     ) -> Bool {
-        #if DEBUG
-            log("canHandle", session, in: interaction.view)
-        #endif
         return session.canLoadObjects(ofClass: String.self)
     }
 
@@ -135,9 +129,6 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
         _ interaction: UIDropInteraction,
         sessionDidUpdate session: any UIDropSession
     ) -> UIDropProposal {
-        #if DEBUG
-            log("sessionDidUpdate", session, in: interaction.view)
-        #endif
         return UIDropProposal(operation: .copy)
     }
 
@@ -146,13 +137,6 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
         previewForDropping item: UIDragItem,
         withDefault defaultPreview: UITargetedDragPreview
     ) -> UITargetedDragPreview? {
-        #if DEBUG
-            print("drop.previewForDropping")
-            dumpRuntime(defaultPreview, label: "  preview")
-            dumpRuntime(defaultPreview.target, label: "  target")
-            dumpRuntime(defaultPreview.view, label: "  view")
-            dumpRuntime(item, label: "  item")
-        #endif
         droppedPreview = defaultPreview
         droppedTransform = suggestedTransform(of: item)
         // nil fades the preview out in place, handing off to the placement springing in
@@ -163,9 +147,6 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
         _ interaction: UIDropInteraction,
         performDrop session: any UIDropSession
     ) {
-        #if DEBUG
-            log("performDrop", session, in: interaction.view)
-        #endif
         guard let view = interaction.view else { return }
         let location = session.location(in: view)
 
@@ -196,98 +177,6 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
             )
         }
     }
-
-    #if DEBUG
-        // A drop is handed nothing that carries the pinch and rotation the user applies to
-        // the preview, so this logs every callback and reaches past the public surface into
-        // the private ivars behind the session, the preview and the drag item, printing any
-        // that holds a CGAffineTransform. DEBUG only, and must stay that way: it depends on
-        // private structure and would be private API use in a shipped build.
-        func dropInteraction(
-            _ interaction: UIDropInteraction,
-            sessionDidEnter session: any UIDropSession
-        ) {
-            log("sessionDidEnter", session, in: interaction.view)
-            dumpRuntime(session, label: "  session")
-            for item in session.items {
-                dumpRuntime(item, label: "  item")
-                dumpRuntime(item.itemProvider, label: "  itemProvider")
-            }
-            if let drag = session.localDragSession {
-                dumpRuntime(drag, label: "  localDragSession")
-            }
-        }
-
-        func dropInteraction(
-            _ interaction: UIDropInteraction,
-            sessionDidExit session: any UIDropSession
-        ) {
-            log("sessionDidExit", session, in: interaction.view)
-        }
-
-        func dropInteraction(
-            _ interaction: UIDropInteraction,
-            concludeDrop session: any UIDropSession
-        ) {
-            log("concludeDrop", session, in: interaction.view)
-        }
-
-        func dropInteraction(
-            _ interaction: UIDropInteraction,
-            sessionDidEnd session: any UIDropSession
-        ) {
-            log("sessionDidEnd", session, in: interaction.view)
-        }
-
-        func dropInteraction(
-            _ interaction: UIDropInteraction,
-            item: UIDragItem,
-            willAnimateDropWith animator: any UIDragAnimating
-        ) {
-            print("drop.willAnimateDrop")
-            dumpRuntime(animator, label: "  animator")
-        }
-
-        private func log(_ event: String, _ session: any UIDropSession, in view: UIView?) {
-            let location = view.map { "\(session.location(in: $0))" } ?? "?"
-            print(
-                "drop.\(event) at=\(location) items=\(session.items.count)"
-                    + " move=\(session.allowsMoveOperation)"
-                    + " restricted=\(session.isRestrictedToDraggingApplication)"
-                    + " local=\(session.localDragSession != nil)"
-            )
-        }
-
-        // names and type encodings only, except for transforms, which are read straight
-        // off the ivar offset — safe, and the whole point of looking
-        private func dumpRuntime(_ object: AnyObject, label: String) {
-            print("\(label) \(type(of: object)) — \(object)")
-
-            var current: AnyClass? = object_getClass(object)
-            while let cls = current {
-                var count: UInt32 = 0
-                if let ivars = class_copyIvarList(cls, &count) {
-                    for index in 0..<Int(count) {
-                        let ivar = ivars[index]
-                        guard let rawName = ivar_getName(ivar) else { continue }
-                        let name = String(cString: rawName)
-                        let encoding = ivar_getTypeEncoding(ivar).map { String(cString: $0) }
-                        print("\(label)   \(name): \(encoding ?? "?")")
-
-                        guard let encoding, encoding.contains("CGAffineTransform") else {
-                            continue
-                        }
-                        let transform = Unmanaged.passUnretained(object).toOpaque()
-                            .advanced(by: ivar_getOffset(ivar))
-                            .assumingMemoryBound(to: CGAffineTransform.self).pointee
-                        print("\(label)     -> \(transform)")
-                    }
-                    free(ivars)
-                }
-                current = class_getSuperclass(cls)
-            }
-        }
-    #endif
 }
 
 // one feel for a placement settling into place, whether it arrives (a transition) or
