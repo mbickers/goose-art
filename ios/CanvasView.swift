@@ -38,18 +38,26 @@ private func lastEmojiInString(_ string: String) -> Emoji? {
     return string.compactMap { Emoji($0) }.last
 }
 
-// an emoji as it left the drag: where it landed, and the size and angle the user pinched
-// and rotated the preview to, both in the canvas's own points
+// an emoji as it left the drag: where it landed, and how tall its preview was, in the
+// canvas's own points
 private struct DroppedEmoji {
     let emoji: Emoji
     let location: CGPoint
     let height: CGFloat
-    let rotation: CGFloat
 }
 
-// UIKit reports that pinch and rotation in exactly one place — the preview it offers back
-// as the drop lands — and SwiftUI's DropDelegate has no hook for it, which is the reason
-// the canvas hosts a UIDropInteraction rather than using .dropDestination or .onDrop.
+// the canvas hosts a UIDropInteraction rather than using .dropDestination or .onDrop
+// because SwiftUI reports no size for what was dragged and UIKit's drop preview does.
+//
+// A pinch or rotation the user applies to the preview mid-drag is not readable at all.
+// Every one of these is identity, or the untransformed bounds, on a drop whose preview
+// was visibly resized and rotated: UITargetedDragPreview's `target.transform`,
+// `view.transform`, `view.bounds` and `size`. UIDragDropSession exposes only
+// `location(in:)`, and SwiftUI's DropSession and DropInfo carry no transform either —
+// `UIPreviewTarget.transform` is the single readable CGAffineTransform in the whole of
+// drag and drop, and it is an output, describing where a drop animates *to*. The system
+// renders the preview out of process, so an emoji always lands upright, and is resized
+// and rotated afterwards like any other placement.
 private struct EmojiDropTarget: UIViewRepresentable {
     let onDrop: (DroppedEmoji) -> Void
 
@@ -123,24 +131,77 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
             let preview = self.droppedPreview
             self.droppedPreview = nil
 
-            // a preview's size is its view's untransformed bounds, so the pinch and
-            // rotation the user applied land on that view's own transform. the target's
-            // is a further one the drop animation may ask for, so the two compose.
-            // UIKit offers a preview for every visible item, so one is all but assured;
-            // an emoji still lands without it, just at a stock size and upright
-            let transform = (preview?.view.transform ?? .identity)
-                .concatenating(preview?.target.transform ?? .identity)
+            #if DEBUG
+                self.logDrop(session: session, view: view, preview: preview)
+            #endif
+
             self.onDrop(
                 DroppedEmoji(
                     emoji: emoji,
                     location: location,
-                    height: (preview?.size.height ?? unpreviewedDropHeight)
-                        * transform.scaleFactor(),
-                    rotation: transform.rotationAngle()
+                    // UIKit offers a preview for every visible item, so one is all but
+                    // assured; an emoji still lands without it, at a stock size
+                    height: preview?.size.height ?? unpreviewedDropHeight
                 )
             )
         }
     }
+
+    #if DEBUG
+        // everything a drop can see, dumped in one go, hunting for any trace of the
+        // pinch and rotation the user applied to the preview
+        private func logDrop(
+            session: any UIDropSession,
+            view: UIView,
+            preview: UITargetedDragPreview?
+        ) {
+            print("=== drop ===")
+            print("location \(session.location(in: view)) in bounds \(view.bounds)")
+            print(
+                "session items=\(session.items.count)"
+                    + " allowsMove=\(session.allowsMoveOperation)"
+                    + " restricted=\(session.isRestrictedToDraggingApplication)"
+                    + " local=\(session.localDragSession != nil)"
+            )
+            for item in session.items {
+                print(
+                    "item types=\(item.itemProvider.registeredTypeIdentifiers)"
+                        + " name=\(String(describing: item.itemProvider.suggestedName))"
+                        + " localObject=\(String(describing: item.localObject))"
+                        + " previewProvider=\(item.previewProvider != nil)"
+                )
+            }
+
+            guard let preview else {
+                print("preview none")
+                return
+            }
+            print("preview size=\(preview.size) parameters=\(preview.parameters)")
+            print(
+                "target center=\(preview.target.center)"
+                    + " transform=\(preview.target.transform)"
+                    + " container=\(type(of: preview.target.container))"
+                    + " containerBounds=\(preview.target.container.bounds)"
+            )
+            logViewTree(preview.view, depth: 0)
+        }
+
+        // the scale may sit on a subview or a layer rather than the preview's own view
+        private func logViewTree(_ view: UIView, depth: Int) {
+            let indent = String(repeating: "  ", count: depth)
+            print(
+                "\(indent)\(type(of: view))"
+                    + " bounds=\(view.bounds) frame=\(view.frame) center=\(view.center)"
+                    + " transform=\(view.transform)"
+                    + " layerAffine=\(view.layer.affineTransform())"
+                    + " layer3D=\(view.layer.transform)"
+                    + " contentsScale=\(view.layer.contentsScale)"
+            )
+            for subview in view.subviews {
+                logViewTree(subview, depth: depth + 1)
+            }
+        }
+    #endif
 }
 
 // one feel for a placement settling into place, whether it arrives (a transition) or
@@ -230,9 +291,9 @@ struct CanvasView: View {
         return makeDragGesture(source: .canvas, makePlacement: { _ in placement })
     }
 
-    // the drop reports the preview's real on-screen height, so the emoji keeps the size it
-    // was dragged at without the canvas having to guess a text height. mirroring is the one
-    // thing a drag can't carry, and the button already covers it
+    // the drop reports its preview's height, so the emoji arrives at about the size it was
+    // dragged at without the canvas having to guess a text height. rotation and mirroring
+    // are not carried: the buttons and gestures cover both once it has landed
     private func dropEmoji(_ drop: DroppedEmoji) {
         guard let canvasFrame else { return }
 
@@ -244,7 +305,7 @@ struct CanvasView: View {
                     scale: (drop.height / canvasFrame.height).clamped(
                         to: Placement.scaleRange
                     ),
-                    rotation: drop.rotation,
+                    rotation: 0,
                     isMirrored: false,
                     id: UUID().uuidString
                 )
