@@ -130,17 +130,6 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
             // an emoji still lands without it, just at a stock size and upright
             let transform = (preview?.view.transform ?? .identity)
                 .concatenating(preview?.target.transform ?? .identity)
-
-            #if DEBUG
-                // temporary: narrowing down where UIKit keeps a pinched preview's scale
-                print(
-                    "drop preview"
-                        + " size=\(String(describing: preview?.size))"
-                        + " bounds=\(String(describing: preview?.view.bounds))"
-                        + " view=\(String(describing: preview?.view.transform))"
-                        + " target=\(String(describing: preview?.target.transform))"
-                )
-            #endif
             self.onDrop(
                 DroppedEmoji(
                     emoji: emoji,
