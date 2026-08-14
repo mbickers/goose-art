@@ -9,8 +9,6 @@ from aioapns import APNs, NotificationRequest, PushType
 
 from users import user_configs_by_user_id
 
-# untracked for the same reasons as user_tokens.json: the signing key stays out of the
-# repo, and deploy.sh (which only rsyncs git-tracked files) leaves the deployed copy alone
 apns_config_path = Path(__file__).parent / "apns_config.json"
 device_notification_tokens_path = (
     Path(__file__).parent / "device_notification_tokens.json"
@@ -37,8 +35,6 @@ class ApnsConfig:
         )
 
 
-# a device belongs to one user at a time: registering moves it, so that logging in as
-# someone else on a shared device stops delivering the previous user's notifications
 class DeviceNotificationTokenRegistry:
     def __init__(self, *, path: Path):
         self.path = path
@@ -54,6 +50,8 @@ class DeviceNotificationTokenRegistry:
         )
 
     def register(self, *, user_id: str, device_notification_token: str):
+        # a device belongs to one user at a time: registering moves it, so that logging in as
+        # someone else on a shared device stops delivering the previous user's notifications
         self.device_notification_tokens_by_user_id = {
             other_user_id: device_notification_tokens - {device_notification_token}
             for other_user_id, device_notification_tokens in self.device_notification_tokens_by_user_id.items()
@@ -91,8 +89,6 @@ def device_notification_token_registry() -> DeviceNotificationTokenRegistry:
     return DeviceNotificationTokenRegistry(path=device_notification_tokens_path)
 
 
-# absent so that a local server runs without APNs credentials; main.py reports at startup
-# whether it found a config
 @cache
 def apns_config() -> ApnsConfig | None:
     if not apns_config_path.exists():
@@ -102,9 +98,6 @@ def apns_config() -> ApnsConfig | None:
     )
 
 
-# one client per environment, because a device token is only valid in the environment the
-# app registered with: sending to the other one is silently dropped rather than reported
-# as an error
 @cache
 def apns_client(*, use_sandbox: bool) -> APNs | None:
     config = apns_config()
@@ -135,13 +128,12 @@ async def send_push(*, user_id: str, body: str, collapse_id: str):
             client.send_notification(
                 NotificationRequest(
                     device_token=device_notification_token,
-                    # a placement is worth seeing but not worth interrupting for, so it
-                    # goes into the notification list without a sound or waking the
-                    # screen. passive rules out a sound, so there is no key to set
                     message={
                         "aps": {
                             "alert": {"body": body},
-                            "interruption-level": "passive",
+                            "interruption-level":
+                            # don't ding
+                            "passive",
                         }
                     },
                     collapse_key=collapse_id,

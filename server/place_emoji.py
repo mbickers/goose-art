@@ -4,8 +4,8 @@
 # dependencies = ["websockets"]
 # ///
 
-# Places one emoji on a user's canvas, the same way the app would, for testing the
-# server without a device: `./place_emoji.py "dev user 1"`.
+"""Places one emoji on a user's canvas, the same way the app would, for testing the
+server without a device: `./place_emoji.py "dev user 1"`."""
 
 import argparse
 import asyncio
@@ -19,10 +19,6 @@ import websockets
 
 from canvas_types import CanvasState, Placement, Position
 
-pumpkin = "🎃"
-# matches the size the app drops a placement at, and keeps it clear of the edges
-placement_scale = 0.3
-placement_position_range = (0.15, 0.85)
 confirmation_timeout = 10.0
 
 user_tokens_path = Path(__file__).parent / "user_tokens.json"
@@ -44,6 +40,7 @@ def token_for(*, user_id: str) -> str:
 
 
 def random_placement(*, emoji: str) -> Placement:
+    placement_position_range = (0.15, 0.85)
     return Placement(
         id=str(uuid.uuid4()),
         emoji=emoji,
@@ -51,7 +48,7 @@ def random_placement(*, emoji: str) -> Placement:
             x=random.uniform(*placement_position_range),
             y=random.uniform(*placement_position_range),
         ),
-        scale=placement_scale,
+        scale=0.3,
         rotation=0.0,
         is_mirrored=False,
     )
@@ -80,8 +77,6 @@ async def place(*, base_url: str, user_id: str, emoji: str):
     ) as websocket:
         await websocket.send(json.dumps(upsert_message(placement=placement)))
 
-        # the server broadcasts the whole canvas on every change, so waiting for the
-        # placement to come back is what proves it was accepted rather than dropped
         async with asyncio.timeout(confirmation_timeout):
             async for message in websocket:
                 state = CanvasState.from_json(json.loads(message)["state"])
@@ -96,7 +91,7 @@ async def place(*, base_url: str, user_id: str, emoji: str):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("user_id", help="a user in user_tokens.json, e.g. 'dev user 1'")
-    parser.add_argument("--emoji", default=pumpkin)
+    parser.add_argument("--emoji", default="🎃")
     parser.add_argument("--base-url", default="https://goose-art.maxbickers.com")
     args = parser.parse_args()
 

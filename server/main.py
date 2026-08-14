@@ -86,8 +86,6 @@ app = FastAPI(lifespan=lifespan)
 user_tokens_path = Path(__file__).parent / "user_tokens.json"
 
 
-# validated on load so that every later lookup can index directly: a token for a user
-# who isn't in users.py is a mistake in the file, not a case to handle per request
 @cache
 def user_ids_by_token() -> dict[str, str]:
     tokens: dict[str, str] = json.loads(user_tokens_path.read_text())
@@ -123,10 +121,10 @@ async def canvas_handler(
     device_id: Annotated[str, Query(alias="deviceId")],
     authorization: Annotated[str | None, Header()] = None,
 ):
-    # closing before accept makes the handshake fail with HTTP 403, which the client
-    # reads as "this token is bad" and stops retrying
     user_id = authenticated_user_id(authorization)
     if user_id is None:
+        # closing before accept fails the handshake with a 403, which tells the client
+        # the token is bad and to stop retrying
         await websocket.close(code=4001, reason="unauthenticated")
         return
     canvas_id = user_configs_by_user_id[user_id].canvas_id
@@ -156,14 +154,9 @@ async def canvas_handler(
             actions = deserialize_client_message(
                 data, deserialize_action=action_from_json
             )
-            # safe to hold across the call because reducing replaces the state rather
-            # than mutating it
             before = canvas.state
             canvas.process_actions(actions, device_id=device_id)
 
-            # comparing before and after rather than reading the actions: a clear a
-            # reconnecting client resent changes nothing, and taking the last placement
-            # off the canvas empties it just as a clear does
             if before.placements and not canvas.state.placements:
                 save_canvas(canvas_id=canvas_id, state=before)
                 placement_notifier().canvas_cleared(canvas_id=canvas_id)

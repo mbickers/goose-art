@@ -9,8 +9,6 @@ class UserConfig:
     use_sandbox_notifications: bool
 
 
-# hardcoded because a new user needs a token handed out by hand anyway, so there is
-# nothing a config file would let us change without a deploy
 user_configs_by_user_id = {
     "max": UserConfig(canvas_id="prod", use_sandbox_notifications=False),
     "brian": UserConfig(canvas_id="prod", use_sandbox_notifications=False),

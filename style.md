@@ -127,11 +127,20 @@ struct Placement {
 The other reason to name one is **more than one use**: two call sites that must
 agree need a single definition, or they'll drift apart.
 
-## Keep a comment short, and attach it to what it explains
+## Most comments shouldn't exist!
 
-A comment is for what the code can't say: a reason, a constraint, a fact from
-outside the file. It isn't a place to restate the code in prose, and it isn't
-where a paragraph goes to live. Say the thing and stop.
+The only reason to leave a comment is to justify confusing code, e.g.
+
+- **The framework does something surprising, so correct code looks wrong.**
+- **A dead end you already tried**
+- **A unit or coordinate system the types don't carry.**
+- **Something tightly coupled that isn't obvious locally**
+
+Use plain language. Write it the way you'd say it out loud to the next person.
+A comment that reads like an essay is usually explaining something the code
+already said.
+
+## Keep comments short, and attach it to what it explains
 
 A block above a call that explains three of its arguments in turn makes a reader
 hold all three at once and then match them back by position. Split it, and put
@@ -161,13 +170,11 @@ onDrop(
 )
 ```
 
-The same holds for a type's properties and a function's parameters — a note about
-one of them belongs on it, and a unit or a caveat is often short enough to sit at
-the end of the line:
-
-```swift
-let baseRotation: CGFloat  // radians
-```
+Put a comment on the line it is about. Attaching it to the function or type
+around it is not close enough: the reader has to work out which line it meant,
+and it drifts as the code changes. A note about one modifier goes on that
+modifier, inside the body. One about a property goes on the property, at the end
+of the line if it fits. One about a branch goes inside the branch.
 
 ## Comments and docs describe the code as it stands
 
