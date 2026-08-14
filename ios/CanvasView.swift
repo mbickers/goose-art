@@ -40,12 +40,12 @@ private func lastEmojiInString(_ string: String) -> Emoji? {
 
 // an emoji as it left the drag: where it landed, and the size and angle the user pinched
 // and rotated its preview to, in the canvas's own points
-private struct DroppedEmoji {
-    let emoji: Emoji
-    let location: CGPoint
-    let height: CGFloat
-    let rotation: CGFloat
-}
+private typealias EmojiDropHandler = (
+    _ emoji: Emoji,
+    _ itemPosition: CGPoint,
+    _ itemHeight: CGFloat,
+    _ itemRotation: CGFloat
+) -> Void
 
 // the canvas hosts a UIDropInteraction rather than using .dropDestination or .onDrop
 // because SwiftUI reports no size for what was dragged and UIKit's drop preview does.
@@ -60,7 +60,7 @@ private struct DroppedEmoji {
 //
 // It survives in one place, which `UIDragItem.unsafeExtractSuggestedTransform()` reads.
 private struct EmojiDropTarget: UIViewRepresentable {
-    let onDrop: (DroppedEmoji) -> Void
+    let onDrop: EmojiDropHandler
 
     func makeUIView(context: Context) -> UIView {
         let view = UIView()
@@ -81,14 +81,14 @@ private struct EmojiDropTarget: UIViewRepresentable {
 private let unpreviewedDropHeight: CGFloat = 55
 
 private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
-    var onDrop: (DroppedEmoji) -> Void
+    var onDrop: EmojiDropHandler
 
     // UIKit offers the preview after performDrop but before the item provider delivers,
     // so these are held here and read once the string finally arrives
     private var droppedPreview: UITargetedDragPreview? = nil
     private var droppedTransform: CGAffineTransform = .identity
 
-    init(onDrop: @escaping (DroppedEmoji) -> Void) {
+    init(onDrop: @escaping EmojiDropHandler) {
         self.onDrop = onDrop
     }
 
@@ -137,21 +137,17 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
             self.droppedPreview = nil
             self.droppedTransform = .identity
 
-            // UIKit offers a preview for every visible item, so one is all but assured;
-            // an emoji still lands without it, at the touch and a stock size
+            // the preview's own centre rather than the touch: a drag is carried by the
+            // point it was grabbed at, so the finger sits off the glyph's centre by
+            // however far that was, and dropping at it lands crooked. its size is what it
+            // was before the pinch, so the size on screen is that put through the
+            // transform. UIKit offers a preview for every visible item, so one is all but
+            // assured; an emoji still lands without it, at the touch and a stock size
             self.onDrop(
-                DroppedEmoji(
-                    emoji: emoji,
-                    // the preview's own centre rather than the touch: a drag is carried
-                    // by the point it was grabbed at, so the finger sits off the glyph's
-                    // centre by however far that was, and dropping at it lands crooked
-                    location: preview?.target.center ?? location,
-                    // the preview's size is what it was before the pinch, so the size on
-                    // screen is that put through the transform
-                    height: (preview?.size.height ?? unpreviewedDropHeight)
-                        * transform.scaleFactor(),
-                    rotation: transform.rotationAngle()
-                )
+                emoji,
+                preview?.target.center ?? location,
+                (preview?.size.height ?? unpreviewedDropHeight) * transform.scaleFactor(),
+                transform.rotationAngle()
             )
         }
     }
@@ -247,24 +243,29 @@ struct CanvasView: View {
     // a drop reports the size and angle it was dragged at, so the emoji arrives as it
     // looked under the finger. mirroring is the one thing a drag can't carry, and the
     // button already covers it
-    private func dropEmoji(_ drop: DroppedEmoji) {
+    private func dropEmoji(
+        _ emoji: Emoji,
+        itemPosition: CGPoint,
+        itemHeight: CGFloat,
+        itemRotation: CGFloat
+    ) {
         guard let canvasFrame else { return }
 
         placementService.apply(
             .upsert(
                 placement: Placement(
-                    emoji: drop.emoji,
-                    position: drop.location.safeDivide(canvasFrame.width),
-                    scale: (drop.height / canvasFrame.height).clamped(
+                    emoji: emoji,
+                    position: itemPosition.safeDivide(canvasFrame.width),
+                    scale: (itemHeight / canvasFrame.height).clamped(
                         to: Placement.scaleRange
                     ),
-                    rotation: drop.rotation,
+                    rotation: itemRotation,
                     isMirrored: false,
                     id: UUID().uuidString
                 )
             )
         )
-        recentEmojisStore.emojiUsed(drop.emoji)
+        recentEmojisStore.emojiUsed(emoji)
     }
 
     private func dropActivePlacement() {
