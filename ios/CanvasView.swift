@@ -68,6 +68,9 @@ private struct EmojiDropTarget: UIViewRepresentable {
     }
 }
 
+// close to the body text an emoji is usually dragged out of
+private let unpreviewedDropHeight: CGFloat = 20
+
 private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
     var onDrop: (DroppedEmoji) -> Void
 
@@ -114,17 +117,21 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
         let location = session.location(in: view)
 
         _ = session.loadObjects(ofClass: String.self) { [weak self] strings in
-            guard let self, let preview = self.droppedPreview,
-                let emoji = strings.compactMap(lastEmojiInString).last
+            guard let self, let emoji = strings.compactMap(lastEmojiInString).last
             else { return }
+
+            let preview = self.droppedPreview
             self.droppedPreview = nil
 
-            let transform = preview.target.transform
+            // UIKit offers a preview for every visible item, so one is all but assured;
+            // an emoji still lands without it, just at a stock size and upright
+            let transform = preview?.target.transform ?? .identity
             self.onDrop(
                 DroppedEmoji(
                     emoji: emoji,
                     location: location,
-                    height: preview.size.height * transform.scaleFactor(),
+                    height: (preview?.size.height ?? unpreviewedDropHeight)
+                        * transform.scaleFactor(),
                     rotation: transform.rotationAngle()
                 )
             )
