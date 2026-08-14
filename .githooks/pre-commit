@@ -1,9 +1,7 @@
 #!/bin/sh
 set -eu
 
-# a TODO is a note to yourself mid-branch, so branches carry them freely and main
-# does not. the whole index is searched rather than the staged diff, so that a merge
-# can't bring one in from code this commit never touched
+# ban TODO comments from main
 if [ "$(git symbolic-ref --quiet --short HEAD)" = "main" ]; then
     todos=$(git grep --cached -n -I -e TODO -- '*.py' '*.swift' || true)
     if [ -n "$todos" ]; then

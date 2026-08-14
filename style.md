@@ -17,17 +17,6 @@ git config core.hooksPath .githooks
 The rules that follow are the ones a formatter can't check: what to name, what
 to label, and when a thing is worth naming at all.
 
-## A TODO belongs to a branch, never to main
-
-A TODO is how you leave a note for yourself while a branch is in flight, so
-branches carry them freely. Landing one on main turns it into a note to nobody:
-the code says work is outstanding and nothing says who owes it. Resolve it, or
-delete what it is attached to, before the branch lands.
-
-The same hook enforces this — it refuses a commit on main whose index holds a
-`TODO` in a `.py` or `.swift` file, and `.githooks/pre-merge-commit` hands merges
-to it, since a merge that applies cleanly commits without running `pre-commit`.
-
 ## Use explicit, required keyword arguments whenever the meaning of an argument is not obvious
 
 A call site should be readable without opening the function being called. If a
@@ -92,6 +81,7 @@ must name their arguments:
 ```python
 def process_actions(self, actions: list[SequencedAction], *, device_id: str): ...
 def subscribe(self, subscriber: PlacementsSubscriber, *, call_on_subscribe: bool): ...
+
 
 @dataclass(kw_only=True)
 class Placement: ...
