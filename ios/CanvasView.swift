@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 private struct SecondTouchState {
     let initialOffset: CGPoint
@@ -35,6 +36,35 @@ private struct ActivePlacementState {
 
 private func lastEmojiInString(_ string: String) -> Emoji? {
     return string.compactMap { Emoji($0) }.last
+}
+
+// dropDestination can't express this on iOS: dropConfiguration and onDropSessionUpdated,
+// the modifiers that let a destination name its own operation, are both macOS-only. Text
+// dragged out of a field suggests .move, and a destination that proposes nothing back
+// refuses it with the grey forbidden badge. A delegate can insist on .copy, which is what
+// this canvas does — a drop adds a placement and must never edit the text it came from.
+private struct EmojiDropDelegate: DropDelegate {
+    let placeEmoji: (Emoji, CGPoint) -> Void
+
+    func validateDrop(info: DropInfo) -> Bool {
+        return info.hasItemsConforming(to: [.text])
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        return DropProposal(operation: .copy)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        guard let provider = info.itemProviders(for: [.text]).first else { return false }
+
+        // read before the completion handler, which outlives this non-escapable DropInfo
+        let dropPoint = info.location
+        _ = provider.loadObject(ofClass: String.self) { string, _ in
+            guard let emoji = string.flatMap(lastEmojiInString) else { return }
+            Task { @MainActor in placeEmoji(emoji, dropPoint) }
+        }
+        return true
+    }
 }
 
 // one feel for a placement settling into place, whether it arrives (a transition) or
@@ -132,15 +162,15 @@ struct CanvasView: View {
     // Nor is the dragged glyph's own size reported (DropSession.size is this view's), so
     // it arrives at the body text height it was most likely dragged out of, which on a
     // canvas this large is already the smallest scale a placement is allowed.
-    private func dropEmoji(from strings: [String], session: DropSession) {
-        guard let emoji = strings.compactMap(lastEmojiInString).last else { return }
+    private func dropEmoji(_ emoji: Emoji, at dropPoint: CGPoint) {
+        guard let canvasFrame else { return }
 
         placementService.apply(
             .upsert(
                 placement: Placement(
                     emoji: emoji,
-                    position: session.location.safeDivide(session.size.width),
-                    scale: (textPointSize / session.size.height).clamped(
+                    position: dropPoint.safeDivide(canvasFrame.width),
+                    scale: (textPointSize / canvasFrame.height).clamped(
                         to: Placement.scaleRange
                     ),
                     rotation: 0,
@@ -361,9 +391,10 @@ struct CanvasView: View {
                     )
                     // sits with .onGeometryChange, above the border's padding, so that a
                     // drop's local coordinates are the same space the glyphs are placed in
-                    .dropDestination(for: String.self) { strings, session in
-                        dropEmoji(from: strings, session: session)
-                    }
+                    .onDrop(
+                        of: [.text],
+                        delegate: EmojiDropDelegate(placeEmoji: dropEmoji)
+                    )
                     .modifier(RoundedBorder(cornerRadius: 20, lineWidth: 6))
                     .aspectRatio(1, contentMode: .fit)
                     .frame(maxWidth: .infinity, maxHeight: 500)
