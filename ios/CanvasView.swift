@@ -1,4 +1,3 @@
-import ObjectiveC
 import SwiftUI
 import UIKit
 
@@ -59,9 +58,7 @@ private struct DroppedEmoji {
 // as do SwiftUI's DropSession and DropInfo. The preview's view is a `_UIDragSlotHostingView`,
 // an empty stand-in, because the live preview renders out of process.
 //
-// It survives in one place: `__suggestedTransform`, a private ivar on the private
-// `_UIDropItem` behind each UIDragItem. See `suggestedTransform(of:)` for how it is read
-// and what happens when it is not there.
+// It survives in one place, which `UIDragItem.unsafeExtractSuggestedTransform()` reads.
 private struct EmojiDropTarget: UIViewRepresentable {
     let onDrop: (DroppedEmoji) -> Void
 
@@ -91,26 +88,6 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
     private var droppedPreview: UITargetedDragPreview? = nil
     private var droppedTransform: CGAffineTransform = .identity
 
-    // the pinch and rotation the user applied, which UIKit works out and then keeps to
-    // itself on the private _UIDropItem behind the item. Read straight off the ivar
-    // offset, and only once its type encoding confirms what is there, so that an iOS
-    // which renames or retypes it yields identity and an emoji lands upright as before
-    // rather than misreading whatever took its place.
-    private func suggestedTransform(of item: UIDragItem) -> CGAffineTransform {
-        guard
-            let ivar = class_getInstanceVariable(
-                object_getClass(item),
-                "__suggestedTransform"
-            ),
-            let encoding = ivar_getTypeEncoding(ivar).map({ String(cString: $0) }),
-            encoding.contains("CGAffineTransform")
-        else { return .identity }
-
-        return Unmanaged.passUnretained(item).toOpaque()
-            .advanced(by: ivar_getOffset(ivar))
-            .assumingMemoryBound(to: CGAffineTransform.self).pointee
-    }
-
     init(onDrop: @escaping (DroppedEmoji) -> Void) {
         self.onDrop = onDrop
     }
@@ -138,7 +115,8 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
         withDefault defaultPreview: UITargetedDragPreview
     ) -> UITargetedDragPreview? {
         droppedPreview = defaultPreview
-        droppedTransform = suggestedTransform(of: item)
+        // an emoji lands upright when the transform can't be had, as it did before it could
+        droppedTransform = item.unsafeExtractSuggestedTransform() ?? .identity
         // nil fades the preview out in place, handing off to the placement springing in
         return nil
     }
