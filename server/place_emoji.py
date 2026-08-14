@@ -17,7 +17,7 @@ from typing import Any
 
 import websockets
 
-from canvas_types import Placement, Position
+from canvas_types import CanvasState, Placement, Position
 
 pumpkin = "🎃"
 # matches the size the app drops a placement at, and keeps it clear of the edges
@@ -84,11 +84,12 @@ async def place(*, base_url: str, user_id: str, emoji: str):
         # placement to come back is what proves it was accepted rather than dropped
         async with asyncio.timeout(confirmation_timeout):
             async for message in websocket:
-                state = [
-                    Placement.from_json(data) for data in json.loads(message)["state"]
-                ]
-                if any(p.id == placement.id for p in state):
-                    print(f"{user_id} placed {emoji} ({len(state)} on the canvas)")
+                state = CanvasState.from_json(json.loads(message)["state"])
+                if any(p.id == placement.id for p in state.placements):
+                    print(
+                        f"{user_id} placed {emoji} "
+                        f"({len(state.placements)} on the canvas)"
+                    )
                     return
 
 

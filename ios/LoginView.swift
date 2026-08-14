@@ -40,23 +40,14 @@ struct LoginView: View {
                     .multilineTextAlignment(.center)
             }
 
-            TextField(
-                "",
-                text: $codeInput,
-                prompt: Text("access code").foregroundColor(Palette.darkPurple.opacity(0.5))
-            )
-            .focused($codeFieldFocused)
-            .onAppear { codeFieldFocused = true }
-            .tint(Palette.darkPurple)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            .submitLabel(.go)
-            .onSubmit(performLogin)
-            .font(.rounded(size: 20, weight: .semibold))
-            .foregroundColor(Palette.darkPurple)
-            .multilineTextAlignment(.center)
-            .frame(height: 50)
-            .modifier(ButtonSurface(color: Palette.yellow, dimmed: false))
+            TextField("", text: $codeInput, prompt: Text.placeholder("access code"))
+                .focused($codeFieldFocused)
+                .onAppear { codeFieldFocused = true }
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.go)
+                .onSubmit(performLogin)
+                .modifier(TextFieldSurface())
 
             CustomButton(
                 content: loggingIn ? .progress : .text("login"),

@@ -142,7 +142,7 @@ private let placementSpring = Spring(duration: 0.3, bounce: 0.45)
 private let paletteColumns = [GridItem(.adaptive(minimum: 66), spacing: 4)]
 
 struct CanvasView: View {
-    let placementService: DistributedStateMachineClient<[Placement], CanvasAction>
+    let canvasService: DistributedStateMachineClient<CanvasState, CanvasAction>
     let userId: String
     let logout: (() -> Void)?
 
@@ -150,6 +150,9 @@ struct CanvasView: View {
 
     @State private var emojiFieldValue: String = ""
     @FocusState private var emojiFieldFocused: Bool
+
+    @State private var titleFieldValue: String = ""
+    @FocusState private var titleFieldFocused: Bool
 
     @State private var activePlacementState: ActivePlacementState? = nil
     @State private var canvasFrame: CGRect? = nil
@@ -230,7 +233,7 @@ struct CanvasView: View {
     ) {
         guard let canvasFrame else { return }
 
-        placementService.apply(
+        canvasService.apply(
             .upsert(
                 placement: Placement(
                     emoji: emoji,
@@ -253,12 +256,12 @@ struct CanvasView: View {
 
         switch (state.source, state.placement.hasValidPosition) {
         case (.palette, true):
-            placementService.apply(.upsert(placement: state.placement))
+            canvasService.apply(.upsert(placement: state.placement))
             recentEmojisStore.emojiUsed(state.placement.emoji)
         case (.canvas, true):
-            placementService.apply(.upsert(placement: state.placement))
+            canvasService.apply(.upsert(placement: state.placement))
         case (.canvas, false):
-            placementService.apply(.remove(placementId: state.placement.id))
+            canvasService.apply(.remove(placementId: state.placement.id))
         case (.palette, false):
             break
         }
@@ -330,6 +333,33 @@ struct CanvasView: View {
                 secondTouchState: nil
             )
         }
+    }
+
+    // the field holds a draft rather than the canvas's title itself, so that a title in
+    // the middle of being typed isn't one the other device is watching land letter by
+    // letter. it is sent once the user is done with it: on return, or when the keyboard
+    // goes away some other way
+    private var titleTextField: some View {
+        TextField("", text: $titleFieldValue, prompt: Text.placeholder("name ye art"))
+            .focused($titleFieldFocused)
+            .textInputAutocapitalization(.words)
+            .submitLabel(.done)
+            // return dismisses the keyboard on its own, but sending the title hangs off
+            // losing focus, so say so rather than leaning on that
+            .onSubmit { titleFieldFocused = false }
+            .onChange(of: titleFieldFocused) { _, isFocused in
+                guard !isFocused, titleFieldValue != canvasService.state.title else {
+                    return
+                }
+                canvasService.apply(.setTitle(title: titleFieldValue))
+            }
+            // the field shows the canvas's title, so a title set on the other device
+            // replaces what is in it — including a draft being typed, since the two
+            // devices are writing one title and the last to set it wins
+            .onChange(of: canvasService.state.title, initial: true) { _, title in
+                titleFieldValue = title
+            }
+            .modifier(TextFieldSurface())
     }
 
     private var emojiTextField: some View {
@@ -409,7 +439,7 @@ struct CanvasView: View {
 
                         if let canvasFrame {
                             ForEach(
-                                placementService.state,
+                                canvasService.state.placements,
                                 id: \.id
                             ) {
                                 placement in
@@ -443,7 +473,7 @@ struct CanvasView: View {
                     // animate (only) new placements
                     .animation(
                         .spring(placementSpring),
-                        value: Set(placementService.state.map(\.id))
+                        value: Set(canvasService.state.placements.map(\.id))
                     )
                     .onGeometryChange(
                         for: CGRect.self,
@@ -457,6 +487,8 @@ struct CanvasView: View {
                     .modifier(RoundedBorder(cornerRadius: 20, lineWidth: 6))
                     .aspectRatio(1, contentMode: .fit)
                     .frame(maxWidth: .infinity, maxHeight: 500)
+
+                    titleTextField
 
                     HStack(spacing: 10) {
                         CustomButton(
@@ -520,7 +552,7 @@ struct CanvasView: View {
         .background(Palette.purple)
         .confirmationDialog("Settings", isPresented: $showingSettings) {
             Button("Clear", role: .destructive) {
-                placementService.apply(.clear)
+                canvasService.apply(.clear)
             }
             Button(soundEffectsEnabled ? "Turn off sound effects" : "Turn on sound effects") {
                 soundEffectsEnabled.toggle()
@@ -534,8 +566,8 @@ struct CanvasView: View {
 
 #Preview {
     CanvasView(
-        placementService: DistributedStateMachineClient(
-            localState: DistributedStateMachineLocalState(initialState: []),
+        canvasService: DistributedStateMachineClient(
+            localState: DistributedStateMachineLocalState(initialState: .empty),
             reduce: reduceCanvas(state:action:)
         ),
         userId: "max",

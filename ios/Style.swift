@@ -51,6 +51,28 @@ struct ButtonSurface: ViewModifier {
     }
 }
 
+// the login screen's access code and the canvas's title are the same control: a line of
+// text centered on a button's surface
+struct TextFieldSurface: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .tint(Palette.darkPurple)
+            .font(.rounded(size: 20, weight: .semibold))
+            .foregroundColor(Palette.darkPurple)
+            .multilineTextAlignment(.center)
+            .frame(height: 50)
+            .modifier(ButtonSurface(color: Palette.yellow, dimmed: false))
+    }
+}
+
+// a TextField takes its placeholder as a Text rather than exposing it to modifiers, so
+// this is the one part of the field's styling that can't live in TextFieldSurface
+extension Text {
+    static func placeholder(_ string: String) -> Text {
+        return Text(string).foregroundColor(Palette.darkPurple.opacity(0.5))
+    }
+}
+
 struct EmojiButton: ViewModifier {
     let color: Color
     let dimmed: Bool

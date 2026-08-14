@@ -12,6 +12,9 @@ Only git-tracked files are transferred, so an uncommitted change will not go out
 and anything untracked on the droplet survives — which is what keeps the APNs key
 and the user token store in place across deploys.
 
+Saved canvases are untracked too, so a change to the format they are written in
+has to be migrated on the droplet by hand after the deploy that changed it.
+
 ## App
 
 1. **Push to `main`.** Xcode Cloud starts a build when the push touches `ios/`.

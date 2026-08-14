@@ -44,6 +44,29 @@ class Placement:
 
 
 @dataclass(kw_only=True)
+class CanvasState:
+    title: str
+    placements: list[Placement]
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "title": self.title,
+            "placements": [placement.to_json() for placement in self.placements],
+        }
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> Self:
+        return cls(
+            title=data["title"],
+            placements=[Placement.from_json(p) for p in data["placements"]],
+        )
+
+
+def empty_canvas() -> CanvasState:
+    return CanvasState(title="", placements=[])
+
+
+@dataclass(kw_only=True)
 class UpsertAction:
     placement: Placement
 
@@ -54,11 +77,16 @@ class RemoveAction:
 
 
 @dataclass(kw_only=True)
+class SetTitleAction:
+    title: str
+
+
+@dataclass(kw_only=True)
 class ClearAction:
     pass
 
 
-Action = UpsertAction | RemoveAction | ClearAction
+Action = UpsertAction | RemoveAction | SetTitleAction | ClearAction
 
 
 def action_from_json(data: dict[str, Any]) -> Action:
@@ -68,22 +96,29 @@ def action_from_json(data: dict[str, Any]) -> Action:
         return UpsertAction(placement=Placement.from_json(data["placement"]))
     elif action_type == "remove":
         return RemoveAction(placement_id=data["placementId"])
+    elif action_type == "setTitle":
+        return SetTitleAction(title=data["title"])
     elif action_type == "clear":
         return ClearAction()
     else:
         raise ValueError(f"Unknown action type: {action_type}")
 
 
-def reduce_canvas(state: list[Placement], action: Action) -> list[Placement]:
+def reduce_canvas(state: CanvasState, action: Action) -> CanvasState:
     match action:
         case UpsertAction(placement=placement):
             # an upserted placement moves to the top of the z-order
-            return [p for p in state if p.id != placement.id] + [placement]
+            return CanvasState(
+                title=state.title,
+                placements=[p for p in state.placements if p.id != placement.id]
+                + [placement],
+            )
         case RemoveAction(placement_id=placement_id):
-            return [p for p in state if p.id != placement_id]
+            return CanvasState(
+                title=state.title,
+                placements=[p for p in state.placements if p.id != placement_id],
+            )
+        case SetTitleAction(title=title):
+            return CanvasState(title=title, placements=state.placements)
         case ClearAction():
-            return []
-
-
-def placements_to_json(placements: list[Placement]) -> list[dict[str, Any]]:
-    return [p.to_json() for p in placements]
+            return empty_canvas()
