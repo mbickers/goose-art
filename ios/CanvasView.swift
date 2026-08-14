@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 private struct SecondTouchState {
     let initialOffset: CGPoint
@@ -35,6 +36,101 @@ private struct ActivePlacementState {
 
 private func lastEmojiInString(_ string: String) -> Emoji? {
     return string.compactMap { Emoji($0) }.last
+}
+
+private typealias EmojiDropHandler = (
+    _ emoji: Emoji,
+    // both in the drop view's coordinates
+    _ itemPosition: CGPoint,
+    _ itemHeight: CGFloat,
+    _ itemRotation: CGFloat  // radians
+) -> Void
+
+private struct EmojiDropTarget: UIViewRepresentable {
+    let onDrop: EmojiDropHandler
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.addInteraction(UIDropInteraction(delegate: context.coordinator))
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) {
+        context.coordinator.onDrop = onDrop
+    }
+
+    func makeCoordinator() -> EmojiDropCoordinator {
+        return EmojiDropCoordinator(onDrop: onDrop)
+    }
+}
+
+private let defaultDroppedItemHeight: CGFloat = 55
+
+private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
+    var onDrop: EmojiDropHandler
+
+    private var droppedPreview: UITargetedDragPreview? = nil
+    private var droppedTransform: CGAffineTransform = .identity
+
+    init(onDrop: @escaping EmojiDropHandler) {
+        self.onDrop = onDrop
+    }
+
+    func dropInteraction(
+        _ interaction: UIDropInteraction,
+        canHandle session: any UIDropSession
+    ) -> Bool {
+        return session.canLoadObjects(ofClass: String.self)
+    }
+
+    // a drag suggesting .move is refused with a forbidden badge unless something is
+    // proposed back. a drop adds a placement and never edits its source, so: copy
+    func dropInteraction(
+        _ interaction: UIDropInteraction,
+        sessionDidUpdate session: any UIDropSession
+    ) -> UIDropProposal {
+        return UIDropProposal(operation: .copy)
+    }
+
+    func dropInteraction(
+        _ interaction: UIDropInteraction,
+        previewForDropping item: UIDragItem,
+        withDefault defaultPreview: UITargetedDragPreview
+    ) -> UITargetedDragPreview? {
+        droppedPreview = defaultPreview
+        droppedTransform = item.unsafeExtractSuggestedTransform() ?? .identity
+        // nil fades the preview out, handing off to the placement springing in
+        return nil
+    }
+
+    func dropInteraction(
+        _ interaction: UIDropInteraction,
+        performDrop session: any UIDropSession
+    ) {
+        guard let view = interaction.view else { return }
+        let location = session.location(in: view)
+
+        _ = session.loadObjects(ofClass: String.self) { [weak self] strings in
+            guard let self else { return }
+
+            // cleared even when nothing lands, so the next drop can't read this one's
+            let preview = self.droppedPreview
+            let transform = self.droppedTransform
+            self.droppedPreview = nil
+            self.droppedTransform = .identity
+
+            // if user tries to drop non-emoji string, just take last emoji
+            guard let emoji = strings.compactMap(lastEmojiInString).last else { return }
+
+            self.onDrop(
+                emoji,
+                // a drag hangs off wherever it was grabbed, so the touch isn't the centre
+                preview?.target.center ?? location,
+                (preview?.size.height ?? defaultDroppedItemHeight) * transform.scaleFactor(),
+                transform.rotationAngle()
+            )
+        }
+    }
 }
 
 // one feel for a placement settling into place, whether it arrives (a transition) or
@@ -122,6 +218,33 @@ struct CanvasView: View {
     // reuses the placement's id so that dropping it upserts rather than duplicates
     private func makePickupGesture(placement: Placement) -> some Gesture {
         return makeDragGesture(source: .canvas, makePlacement: { _ in placement })
+    }
+
+    // a drop reports the size and angle it was dragged at, so the emoji lands looking as
+    // it did under the finger
+    private func dropEmoji(
+        _ emoji: Emoji,
+        itemPosition: CGPoint,
+        itemHeight: CGFloat,
+        itemRotation: CGFloat
+    ) {
+        guard let canvasFrame else { return }
+
+        placementService.apply(
+            .upsert(
+                placement: Placement(
+                    emoji: emoji,
+                    position: itemPosition.safeDivide(canvasFrame.width),
+                    scale: (itemHeight / canvasFrame.height).clamped(
+                        to: Placement.scaleRange
+                    ),
+                    rotation: itemRotation,
+                    isMirrored: false,  // a drag can't carry it; the button covers it
+                    id: UUID().uuidString
+                )
+            )
+        )
+        recentEmojisStore.emojiUsed(emoji)
     }
 
     private func dropActivePlacement() {
@@ -327,6 +450,10 @@ struct CanvasView: View {
                         of: { geometry in geometry.frame(in: .global) },
                         action: { frame in canvasFrame = frame }
                     )
+                    // sits with .onGeometryChange, above the border's padding, so a drop's
+                    // coordinates match the glyphs'. a background, not an overlay: SwiftUI
+                    // hit-tests front to back, so glyphs keep their pickup gestures
+                    .background(EmojiDropTarget(onDrop: dropEmoji))
                     .modifier(RoundedBorder(cornerRadius: 20, lineWidth: 6))
                     .aspectRatio(1, contentMode: .fit)
                     .frame(maxWidth: .infinity, maxHeight: 500)
