@@ -55,9 +55,11 @@ private struct DroppedEmoji {
 // `view.transform`, `view.bounds` and `size`. UIDragDropSession exposes only
 // `location(in:)`, and SwiftUI's DropSession and DropInfo carry no transform either —
 // `UIPreviewTarget.transform` is the single readable CGAffineTransform in the whole of
-// drag and drop, and it is an output, describing where a drop animates *to*. The system
-// renders the preview out of process, so an emoji always lands upright, and is resized
-// and rotated afterwards like any other placement.
+// drag and drop, and it is an output, describing where a drop animates *to*. The view on
+// that preview is a `_UIDragSlotHostingView`: an empty stand-in slot, because the live
+// preview is rendered by the system out of process. Nothing transformed is ever handed
+// over, so an emoji lands upright and is resized and rotated afterwards like any other
+// placement.
 private struct EmojiDropTarget: UIViewRepresentable {
     let onDrop: (DroppedEmoji) -> Void
 
@@ -123,6 +125,27 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
     ) {
         guard let view = interaction.view else { return }
         let location = session.location(in: view)
+
+        #if DEBUG
+            // an emoji dragged off the keyboard is a sticker, and stickers are the one
+            // drag iOS lets you pinch and rotate. if that transform survives anywhere it
+            // is baked into the image it hands over, where it shows as a pixel size.
+            // item data can only be asked for inside performDrop, hence the load here
+            for item in session.items
+            where item.itemProvider.canLoadObject(ofClass: UIImage.self) {
+                _ = item.itemProvider.loadObject(ofClass: UIImage.self) { object, error in
+                    guard let image = object as? UIImage else {
+                        print("drop image failed \(String(describing: error))")
+                        return
+                    }
+                    print(
+                        "drop image size=\(image.size) scale=\(image.scale)"
+                            + " cg=\(image.cgImage.map { ($0.width, $0.height) } as Any)"
+                            + " orientation=\(image.imageOrientation.rawValue)"
+                    )
+                }
+            }
+        #endif
 
         _ = session.loadObjects(ofClass: String.self) { [weak self] strings in
             guard let self, let emoji = strings.compactMap(lastEmojiInString).last
