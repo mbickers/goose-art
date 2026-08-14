@@ -1,6 +1,18 @@
 #!/bin/sh
 set -eu
 
+# a TODO is a note to yourself mid-branch, so branches carry them freely and main
+# does not. the whole index is searched rather than the staged diff, so that a merge
+# can't bring one in from code this commit never touched
+if [ "$(git symbolic-ref --quiet --short HEAD)" = "main" ]; then
+    todos=$(git grep --cached -n -I -e TODO -- '*.py' '*.swift' || true)
+    if [ -n "$todos" ]; then
+        echo "blocked: TODO comments would land on main" >&2
+        echo "$todos" >&2
+        exit 1
+    fi
+fi
+
 staged_files=$(git diff --cached --name-only --diff-filter=ACM -- '*.py' '*.swift')
 
 if [ -n "$staged_files" ]; then
