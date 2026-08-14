@@ -1,6 +1,16 @@
 #!/bin/sh
 set -eu
 
+# ban TODO comments from main
+if [ "$(git symbolic-ref --quiet --short HEAD)" = "main" ]; then
+    todos=$(git grep --cached -n -I -e TODO -- '*.py' '*.swift' || true)
+    if [ -n "$todos" ]; then
+        echo "blocked: TODO comments would land on main" >&2
+        echo "$todos" >&2
+        exit 1
+    fi
+fi
+
 staged_files=$(git diff --cached --name-only --diff-filter=ACM -- '*.py' '*.swift')
 
 if [ -n "$staged_files" ]; then
