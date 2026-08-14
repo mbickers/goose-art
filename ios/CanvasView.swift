@@ -4,7 +4,7 @@ import UIKit
 private struct SecondTouchState {
     let initialOffset: CGPoint
     let baseScale: CGFloat
-    let baseRotation: CGFloat  // radians
+    let baseRotation: CGFloat
 }
 
 private struct ActivePlacementState {
@@ -43,7 +43,7 @@ private typealias EmojiDropHandler = (
     // both in the drop view's coordinates
     _ itemPosition: CGPoint,
     _ itemHeight: CGFloat,
-    _ itemRotation: CGFloat  // radians
+    _ itemRotation: CGFloat
 ) -> Void
 
 private struct EmojiDropTarget: UIViewRepresentable {
@@ -83,12 +83,12 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
         return session.canLoadObjects(ofClass: String.self)
     }
 
-    // a drag suggesting .move is refused with a forbidden badge unless something is
-    // proposed back. a drop adds a placement and never edits its source, so: copy
     func dropInteraction(
         _ interaction: UIDropInteraction,
         sessionDidUpdate session: any UIDropSession
     ) -> UIDropProposal {
+        // a drag suggesting .move is refused with a forbidden badge unless something is
+        // proposed back. a drop adds a placement and never edits its source, so: copy
         return UIDropProposal(operation: .copy)
     }
 
@@ -99,7 +99,7 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
     ) -> UITargetedDragPreview? {
         droppedPreview = defaultPreview
         droppedTransform = item.unsafeExtractSuggestedTransform() ?? .identity
-        // nil fades the preview out, handing off to the placement springing in
+        // nil fades the preview out immediately
         return nil
     }
 
@@ -113,18 +113,17 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
         _ = session.loadObjects(ofClass: String.self) { [weak self] strings in
             guard let self else { return }
 
-            // cleared even when nothing lands, so the next drop can't read this one's
+            // cleared even when nothing lands, so the next drop can't read this one's state
             let preview = self.droppedPreview
             let transform = self.droppedTransform
             self.droppedPreview = nil
             self.droppedTransform = .identity
 
-            // if user tries to drop non-emoji string, just take last emoji
             guard let emoji = strings.compactMap(lastEmojiInString).last else { return }
 
             self.onDrop(
                 emoji,
-                // a drag hangs off wherever it was grabbed, so the touch isn't the centre
+                // a drag hangs off wherever it was grabbed, so the touch isn't the center
                 preview?.target.center ?? location,
                 (preview?.size.height ?? defaultDroppedItemHeight) * transform.scaleFactor(),
                 transform.rotationAngle()
@@ -133,13 +132,7 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
     }
 }
 
-// one feel for a placement settling into place, whether it arrives (a transition) or
-// moves (keyframes), which SwiftUI has no single mechanism for
 private let placementSpring = Spring(duration: 0.3, bounce: 0.45)
-
-// minimum is an EmojiButton's 60 plus the 6 its border adds, so a column is never
-// wide enough for a button it can't actually fit
-private let paletteColumns = [GridItem(.adaptive(minimum: 66), spacing: 4)]
 
 struct CanvasView: View {
     let canvasService: DistributedStateMachineClient<CanvasState, CanvasAction>
@@ -223,8 +216,6 @@ struct CanvasView: View {
         return makeDragGesture(source: .canvas, makePlacement: { _ in placement })
     }
 
-    // a drop reports the size and angle it was dragged at, so the emoji lands looking as
-    // it did under the finger
     private func dropEmoji(
         _ emoji: Emoji,
         itemPosition: CGPoint,
@@ -242,7 +233,7 @@ struct CanvasView: View {
                         to: Placement.scaleRange
                     ),
                     rotation: itemRotation,
-                    isMirrored: false,  // a drag can't carry it; the button covers it
+                    isMirrored: false,
                     id: UUID().uuidString
                 )
             )
@@ -335,17 +326,11 @@ struct CanvasView: View {
         }
     }
 
-    // the field holds a draft rather than the canvas's title itself, so that a title in
-    // the middle of being typed isn't one the other device is watching land letter by
-    // letter. it is sent once the user is done with it: on return, or when the keyboard
-    // goes away some other way
     private var titleTextField: some View {
         TextField("", text: $titleFieldValue, prompt: Text.placeholder("name ye art"))
             .focused($titleFieldFocused)
             .textInputAutocapitalization(.words)
             .submitLabel(.done)
-            // return dismisses the keyboard on its own, but sending the title hangs off
-            // losing focus, so say so rather than leaning on that
             .onSubmit { titleFieldFocused = false }
             .onChange(of: titleFieldFocused) { _, isFocused in
                 guard !isFocused, titleFieldValue != canvasService.state.title else {
@@ -353,9 +338,6 @@ struct CanvasView: View {
                 }
                 canvasService.apply(.setTitle(title: titleFieldValue))
             }
-            // the field shows the canvas's title, so a title set on the other device
-            // replaces what is in it — including a draft being typed, since the two
-            // devices are writing one title and the last to set it wins
             .onChange(of: canvasService.state.title, initial: true) { _, title in
                 titleFieldValue = title
             }
@@ -515,9 +497,7 @@ struct CanvasView: View {
                         }
                     }
 
-                    LazyVGrid(columns: paletteColumns, spacing: 4) {
-                        // dimmed rather than disabled: the drag being dimmed for
-                        // starts here, and disabling would cancel it mid-gesture
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 66), spacing: 4)], spacing: 4) {
                         let dimmed = activePlacementState != nil
 
                         emojiTextField

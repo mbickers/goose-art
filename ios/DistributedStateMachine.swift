@@ -57,8 +57,6 @@ extension DistributedStateMachineLocalState {
         self.onServerUpdate = onServerUpdate
         self.localState = localState
 
-        // the session hydrates from the first message the connection delivers, which is
-        // its opening state rather than news
         connection?.subscribe { [weak self] message in
             self?.applyServerMessage(message)
         }

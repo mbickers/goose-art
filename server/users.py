@@ -19,8 +19,6 @@ user_configs_by_user_id = {
 }
 
 
-# derived per call rather than stored, because the mapping never changes and the number
-# of users sharing a canvas is small
 def other_user_ids_sharing_canvas(user_id: str) -> frozenset[str]:
     canvas_id = user_configs_by_user_id[user_id].canvas_id
     return frozenset(

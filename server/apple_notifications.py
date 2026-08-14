@@ -91,8 +91,8 @@ def device_notification_token_registry() -> DeviceNotificationTokenRegistry:
     return DeviceNotificationTokenRegistry(path=device_notification_tokens_path)
 
 
-# None when the config file is absent, so that a local server runs without APNs
-# credentials. main.py reports at startup whether it found one.
+# absent so that a local server runs without APNs credentials; main.py reports at startup
+# whether it found a config
 @cache
 def apns_config() -> ApnsConfig | None:
     if not apns_config_path.exists():

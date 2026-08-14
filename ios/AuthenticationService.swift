@@ -20,17 +20,13 @@ private func deviceId() -> String {
     return newId
 }
 
-// keyed by token so that logging in as someone else doesn't replay their actions,
-// and digested so that the token itself stays out of UserDefaults
+// keyed by token so that logging in as someone else doesn't replay their actions
 private func localStateKey(token: String) -> String {
     let digest = SHA256.hash(data: Data(token.utf8))
     let hex = digest.map { byte in String(format: "%02x", byte) }.joined()
     return "canvasLocalState-\(hex.prefix(16))"
 }
 
-// local state that fails to decode — written by an older version of the app, say — is
-// discarded rather than crashing: the device starts empty and the server's copy replaces
-// it on connect
 private func loadLocalState(
     token: String
 ) -> DistributedStateMachineLocalState<CanvasState, CanvasAction>? {
@@ -39,6 +35,7 @@ private func loadLocalState(
             forKey: localStateKey(token: token)
         )
     else { return nil }
+    // state we can't decode is ignored
     return try? JSONDecoder().decode(
         DistributedStateMachineLocalState<CanvasState, CanvasAction>.self,
         from: data
@@ -72,12 +69,9 @@ class AuthenticationService {
         }
     }
 
-    // checks the token before authenticating, so a bad code shows an error on the login
-    // screen instead of flashing the canvas and being kicked back by the websocket
     func login(token: String) async {
-        // offline there is nobody to name the user, so the code they typed stands in
         guard let baseURL else {
-            startSession(Session(token: token, userId: token))
+            startSession(Session(token: token, userId: "unknown until reconnect"))
             return
         }
 
@@ -136,8 +130,6 @@ class AuthenticationService {
                 // both the before and after state. a placement id that is new here was
                 // made on some other device
                 onServerUpdate: { previousCanvas, canvas, isFirstUpdateOfSession in
-                    // what was already on the canvas when the session opened isn't an
-                    // arrival, so logging in to a canvas full of emoji stays quiet
                     guard !isFirstUpdateOfSession else { return }
                     let previousIds = Set(previousCanvas.placements.map(\.id))
                     if canvas.placements.contains(where: { placement in
@@ -151,15 +143,12 @@ class AuthenticationService {
         )
     }
 
-    // the server reads a live canvas connection as the user watching placements land, and
-    // so notifies them of nothing while one is open. a suspended app can hold its socket
-    // open long after the user stopped looking, so the connection follows the scene
-    // rather than the session
     func enteredForeground() {
         canvasConnection?.connect()
     }
 
     func enteredBackground() {
+        // disconenct so that server knows not to send us notifications when app is not in foreground
         canvasConnection?.disconnect()
     }
 
@@ -170,8 +159,6 @@ class AuthenticationService {
         state = .unauthenticated(reason: reason)
     }
 
-    // asking again once the user has answered returns that answer without prompting them
-    // a second time, so this can run on every session
     private func requestNotificationAuthorization() async {
         guard baseURL != nil else { return }
 

@@ -1,10 +1,5 @@
 import Foundation
 
-// Maintains a bearer-token-authenticated websocket, reconnecting after transient
-// failures. Generic over the message types, with one stipulation on the protocol
-// it carries: Outbound holds a single latest message, replacing any unsent one, and
-// re-sends it on every reconnect, so messages must be complete and idempotent rather
-// than deltas.
 class AuthenticatedWebSocket<Inbound: Decodable, Outbound: Encodable> {
     private let request: URLRequest
     private let reconnectDelay: TimeInterval = 1.0
@@ -35,8 +30,6 @@ class AuthenticatedWebSocket<Inbound: Decodable, Outbound: Encodable> {
         let url = components.url!.appendingPathComponent(path)
             .appending(queryItems: queryItems)
 
-        // the token goes in a header rather than the query string, which uvicorn
-        // writes to its access log in cleartext on every connect
         var request = URLRequest(url: url)
         request.setValue(
             "Bearer \(token)",
@@ -48,15 +41,11 @@ class AuthenticatedWebSocket<Inbound: Decodable, Outbound: Encodable> {
         connect()
     }
 
-    // a no-op while already connected, so that a repeated scene phase change doesn't
-    // leave a second socket running alongside the first
     func connect() {
         guard connectionTask == nil else { return }
         connectionTask = Task { await maintainConnection() }
     }
 
-    // the connection task retains this connection, so without an explicit teardown it
-    // outlives the session that made it and keeps reconnecting with a stale token
     func disconnect() {
         connectionTask?.cancel()
         connectionTask = nil

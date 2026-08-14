@@ -1,7 +1,6 @@
 import SwiftUI
 import UserNotifications
 
-// pass nil to work offline, or URL(string: "http://localhost:8000") for a local server
 @main
 struct GooseArtApp: App {
     @UIApplicationDelegateAdaptor(PushNotificationDelegate.self)
@@ -10,6 +9,7 @@ struct GooseArtApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var authenticationService = AuthenticationService(
+        // nil to work offline, or URL(string: "http://localhost:8000") for a local server
         baseURL: URL(string: "https://goose-art.maxbickers.com")
     )
 
@@ -95,9 +95,6 @@ private class PushNotificationDelegate: NSObject, UIApplicationDelegate,
         []
     }
 
-    // for the same reason, one delivered while the app was away has been overtaken by
-    // the canvas the user is now looking at, so it is cleared rather than left to pile
-    // up. nothing arrives while foregrounded to clear, since willPresent drops those
     func applicationDidBecomeActive(_ application: UIApplication) {
         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
     }

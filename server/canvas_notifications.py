@@ -30,8 +30,7 @@ def placed_emojis(*, before: list[Placement], after: list[Placement]) -> list[st
 # a placement notifies immediately, and the push names every emoji the recipient has not
 # seen from that placer rather than only the ones that just landed. the collapse id makes
 # each send replace the last, so a burst reads as one notification whose body grows
-# instead of a stack of them — which is what waiting on a timer used to buy, without the
-# notification arriving after the user has already watched the emoji appear.
+# instead of a stack of them.
 #
 # a recipient with a live connection is being served the canvas as it changes, so nothing
 # placed while they are connected is unseen in the first place.

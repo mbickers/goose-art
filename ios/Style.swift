@@ -1,7 +1,5 @@
 import SwiftUI
 
-// namespaced rather than an `extension Color`, because the palette's natural names
-// (blue, pink, purple, yellow) all collide with SwiftUI's built-in colors
 enum Palette {
     static let blue = Color(hex: "8DE8E8")
     static let darkPurple = Color(hex: "2A053E")
@@ -38,7 +36,6 @@ struct RoundedBorder: ViewModifier {
 
 private let buttonBorder = RoundedBorder(cornerRadius: 20, lineWidth: 6)
 
-// the border sits above the dimming so it stays solid while the fill fades
 struct ButtonSurface: ViewModifier {
     let color: Color
     let dimmed: Bool
@@ -47,12 +44,11 @@ struct ButtonSurface: ViewModifier {
         content
             .background(color)
             .opacity(dimmed ? 0.5 : 1)
+            // the border sits above the dimming so it stays solid while the fill fades
             .modifier(buttonBorder)
     }
 }
 
-// the login screen's access code and the canvas's title are the same control: a line of
-// text centered on a button's surface
 struct TextFieldSurface: ViewModifier {
     func body(content: Content) -> some View {
         content
@@ -85,9 +81,7 @@ struct EmojiButton: ViewModifier {
     }
 }
 
-// full width, 40 tall, yellow, dimmed when it can't be used
 struct CustomButton: View {
-    // icons carry heavier weight than text does at the same size
     enum Content {
         case icon(systemName: String)
         case text(String)

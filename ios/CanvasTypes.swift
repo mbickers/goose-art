@@ -71,10 +71,8 @@ struct Placement: Codable, Equatable {
     }
 }
 
-// CGPoint encodes itself as a bare [x, y] array, but the server and every canvas already
-// stored on a device speak {"x": …, "y": …}. Position is the one field that can't be
-// synthesized, and living in an extension keeps the memberwise init synthesized.
 extension Placement {
+    // By default, CGPoint encodes itself as a bare [x, y] array
     private struct Coordinates: Codable {
         let x: CGFloat
         let y: CGFloat
