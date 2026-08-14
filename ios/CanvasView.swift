@@ -1,5 +1,5 @@
 import SwiftUI
-import UniformTypeIdentifiers
+import UIKit
 
 private struct SecondTouchState {
     let initialOffset: CGPoint
@@ -38,32 +38,97 @@ private func lastEmojiInString(_ string: String) -> Emoji? {
     return string.compactMap { Emoji($0) }.last
 }
 
-// dropDestination can't express this on iOS: dropConfiguration and onDropSessionUpdated,
-// the modifiers that let a destination name its own operation, are both macOS-only. Text
-// dragged out of a field suggests .move, and a destination that proposes nothing back
-// refuses it with the grey forbidden badge. A delegate can insist on .copy, which is what
-// this canvas does — a drop adds a placement and must never edit the text it came from.
-private struct EmojiDropDelegate: DropDelegate {
-    let placeEmoji: (Emoji, CGPoint) -> Void
+// an emoji as it left the drag: where it landed, and the size and angle the user pinched
+// and rotated the preview to, both in the canvas's own points
+private struct DroppedEmoji {
+    let emoji: Emoji
+    let location: CGPoint
+    let height: CGFloat
+    let rotation: CGFloat
+}
 
-    func validateDrop(info: DropInfo) -> Bool {
-        return info.hasItemsConforming(to: [.text])
+// UIKit reports that pinch and rotation in exactly one place — the preview it offers back
+// as the drop lands — and SwiftUI's DropDelegate has no hook for it, which is the reason
+// the canvas hosts a UIDropInteraction rather than using .dropDestination or .onDrop.
+private struct EmojiDropTarget: UIViewRepresentable {
+    let onDrop: (DroppedEmoji) -> Void
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.addInteraction(UIDropInteraction(delegate: context.coordinator))
+        return view
     }
 
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        return DropProposal(operation: .copy)
+    func updateUIView(_ view: UIView, context: Context) {
+        context.coordinator.onDrop = onDrop
     }
 
-    func performDrop(info: DropInfo) -> Bool {
-        guard let provider = info.itemProviders(for: [.text]).first else { return false }
+    func makeCoordinator() -> EmojiDropCoordinator {
+        return EmojiDropCoordinator(onDrop: onDrop)
+    }
+}
 
-        // read before the completion handler, which outlives this non-escapable DropInfo
-        let dropPoint = info.location
-        _ = provider.loadObject(ofClass: String.self) { string, _ in
-            guard let emoji = string.flatMap(lastEmojiInString) else { return }
-            Task { @MainActor in placeEmoji(emoji, dropPoint) }
+private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
+    var onDrop: (DroppedEmoji) -> Void
+
+    // UIKit offers the preview after performDrop but before the item provider delivers,
+    // so it is held here and read once the string finally arrives
+    private var droppedPreview: UITargetedDragPreview? = nil
+
+    init(onDrop: @escaping (DroppedEmoji) -> Void) {
+        self.onDrop = onDrop
+    }
+
+    func dropInteraction(
+        _ interaction: UIDropInteraction,
+        canHandle session: any UIDropSession
+    ) -> Bool {
+        return session.canLoadObjects(ofClass: String.self)
+    }
+
+    // text dragged out of a field suggests .move, and a destination that proposes nothing
+    // back is refused with the grey forbidden badge. a drop here adds a placement, and
+    // must never edit the text it came from, so it is always a copy
+    func dropInteraction(
+        _ interaction: UIDropInteraction,
+        sessionDidUpdate session: any UIDropSession
+    ) -> UIDropProposal {
+        return UIDropProposal(operation: .copy)
+    }
+
+    func dropInteraction(
+        _ interaction: UIDropInteraction,
+        previewForDropping item: UIDragItem,
+        withDefault defaultPreview: UITargetedDragPreview
+    ) -> UITargetedDragPreview? {
+        droppedPreview = defaultPreview
+        // nil fades the preview out in place, handing off to the placement springing in
+        return nil
+    }
+
+    func dropInteraction(
+        _ interaction: UIDropInteraction,
+        performDrop session: any UIDropSession
+    ) {
+        guard let view = interaction.view else { return }
+        let location = session.location(in: view)
+
+        _ = session.loadObjects(ofClass: String.self) { [weak self] strings in
+            guard let self, let preview = self.droppedPreview,
+                let emoji = strings.compactMap(lastEmojiInString).last
+            else { return }
+            self.droppedPreview = nil
+
+            let transform = preview.target.transform
+            self.onDrop(
+                DroppedEmoji(
+                    emoji: emoji,
+                    location: location,
+                    height: preview.size.height * transform.scaleFactor(),
+                    rotation: transform.rotationAngle()
+                )
+            )
         }
-        return true
     }
 }
 
@@ -88,8 +153,6 @@ struct CanvasView: View {
     @State private var activePlacementState: ActivePlacementState? = nil
     @State private var canvasFrame: CGRect? = nil
     @State private var showingSettings = false
-    // 17 is the system body size, and @ScaledMetric tracks it through Dynamic Type
-    @ScaledMetric(relativeTo: .body) private var textPointSize: CGFloat = 17
     @AppStorage(MessageSound.enabledDefaultsKey) private var soundEffectsEnabled = true
 
     // two coordinate systems meet here: screen points, which is what gestures report in
@@ -156,30 +219,27 @@ struct CanvasView: View {
         return makeDragGesture(source: .canvas, makePlacement: { _ in placement })
     }
 
-    // a system drag carries one point and nothing else — UIDragDropSession exposes only
-    // location(in:), with no scale, rotation, or second touch — so a dropped emoji lands
-    // upright and unmirrored, and the user resizes it afterwards like any other placement.
-    // Nor is the dragged glyph's own size reported (DropSession.size is this view's), so
-    // it arrives at the body text height it was most likely dragged out of, which on a
-    // canvas this large is already the smallest scale a placement is allowed.
-    private func dropEmoji(_ emoji: Emoji, at dropPoint: CGPoint) {
+    // the drop reports the preview's real on-screen height, so the emoji keeps the size it
+    // was dragged at without the canvas having to guess a text height. mirroring is the one
+    // thing a drag can't carry, and the button already covers it
+    private func dropEmoji(_ drop: DroppedEmoji) {
         guard let canvasFrame else { return }
 
         placementService.apply(
             .upsert(
                 placement: Placement(
-                    emoji: emoji,
-                    position: dropPoint.safeDivide(canvasFrame.width),
-                    scale: (textPointSize / canvasFrame.height).clamped(
+                    emoji: drop.emoji,
+                    position: drop.location.safeDivide(canvasFrame.width),
+                    scale: (drop.height / canvasFrame.height).clamped(
                         to: Placement.scaleRange
                     ),
-                    rotation: 0,
+                    rotation: drop.rotation,
                     isMirrored: false,
                     id: UUID().uuidString
                 )
             )
         )
-        recentEmojisStore.emojiUsed(emoji)
+        recentEmojisStore.emojiUsed(drop.emoji)
     }
 
     private func dropActivePlacement() {
@@ -390,11 +450,10 @@ struct CanvasView: View {
                         action: { frame in canvasFrame = frame }
                     )
                     // sits with .onGeometryChange, above the border's padding, so that a
-                    // drop's local coordinates are the same space the glyphs are placed in
-                    .onDrop(
-                        of: [.text],
-                        delegate: EmojiDropDelegate(placeEmoji: dropEmoji)
-                    )
+                    // drop's coordinates are the same space the glyphs are placed in. a
+                    // background rather than an overlay: SwiftUI hit-tests front to back,
+                    // so the glyphs above keep their own pickup gestures
+                    .background(EmojiDropTarget(onDrop: dropEmoji))
                     .modifier(RoundedBorder(cornerRadius: 20, lineWidth: 6))
                     .aspectRatio(1, contentMode: .fit)
                     .frame(maxWidth: .infinity, maxHeight: 500)
