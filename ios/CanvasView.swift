@@ -57,7 +57,9 @@ private struct DroppedEmoji {
 // `UIPreviewTarget.transform` is the single readable CGAffineTransform in the whole of
 // drag and drop, and it is an output, describing where a drop animates *to*. The view on
 // that preview is a `_UIDragSlotHostingView`: an empty stand-in slot, because the live
-// preview is rendered by the system out of process. Nothing transformed is ever handed
+// preview is rendered by the system out of process. An emoji dragged off the keyboard
+// arrives as a sticker, which is why it can be pinched at all, but its image is the plain
+// 160pt emoji bitmap whether it was pinched or not. Nothing transformed is ever handed
 // over, so an emoji lands upright and is resized and rotated afterwards like any other
 // placement.
 private struct EmojiDropTarget: UIViewRepresentable {
@@ -78,8 +80,8 @@ private struct EmojiDropTarget: UIViewRepresentable {
     }
 }
 
-// close to the body text an emoji is usually dragged out of
-private let unpreviewedDropHeight: CGFloat = 20
+// what iOS sizes the preview of a dragged emoji at
+private let unpreviewedDropHeight: CGFloat = 55
 
 private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
     var onDrop: (DroppedEmoji) -> Void
@@ -126,27 +128,6 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
         guard let view = interaction.view else { return }
         let location = session.location(in: view)
 
-        #if DEBUG
-            // an emoji dragged off the keyboard is a sticker, and stickers are the one
-            // drag iOS lets you pinch and rotate. if that transform survives anywhere it
-            // is baked into the image it hands over, where it shows as a pixel size.
-            // item data can only be asked for inside performDrop, hence the load here
-            for item in session.items
-            where item.itemProvider.canLoadObject(ofClass: UIImage.self) {
-                _ = item.itemProvider.loadObject(ofClass: UIImage.self) { object, error in
-                    guard let image = object as? UIImage else {
-                        print("drop image failed \(String(describing: error))")
-                        return
-                    }
-                    print(
-                        "drop image size=\(image.size) scale=\(image.scale)"
-                            + " cg=\(image.cgImage.map { ($0.width, $0.height) } as Any)"
-                            + " orientation=\(image.imageOrientation.rawValue)"
-                    )
-                }
-            }
-        #endif
-
         _ = session.loadObjects(ofClass: String.self) { [weak self] strings in
             guard let self, let emoji = strings.compactMap(lastEmojiInString).last
             else { return }
@@ -154,77 +135,21 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
             let preview = self.droppedPreview
             self.droppedPreview = nil
 
-            #if DEBUG
-                self.logDrop(session: session, view: view, preview: preview)
-            #endif
-
+            // UIKit offers a preview for every visible item, so one is all but assured;
+            // an emoji still lands without it, at the touch and a stock size
             self.onDrop(
                 DroppedEmoji(
                     emoji: emoji,
-                    location: location,
-                    // UIKit offers a preview for every visible item, so one is all but
-                    // assured; an emoji still lands without it, at a stock size
+                    // the preview's own centre rather than the touch: a drag is carried
+                    // by the point it was grabbed at, so the finger sits off the glyph's
+                    // centre by however far that was, and dropping at it lands crooked
+                    location: preview?.target.center ?? location,
                     height: preview?.size.height ?? unpreviewedDropHeight
                 )
             )
         }
     }
 
-    #if DEBUG
-        // everything a drop can see, dumped in one go, hunting for any trace of the
-        // pinch and rotation the user applied to the preview
-        private func logDrop(
-            session: any UIDropSession,
-            view: UIView,
-            preview: UITargetedDragPreview?
-        ) {
-            print("=== drop ===")
-            print("location \(session.location(in: view)) in bounds \(view.bounds)")
-            print(
-                "session items=\(session.items.count)"
-                    + " allowsMove=\(session.allowsMoveOperation)"
-                    + " restricted=\(session.isRestrictedToDraggingApplication)"
-                    + " local=\(session.localDragSession != nil)"
-            )
-            for item in session.items {
-                print(
-                    "item types=\(item.itemProvider.registeredTypeIdentifiers)"
-                        + " name=\(String(describing: item.itemProvider.suggestedName))"
-                        + " localObject=\(String(describing: item.localObject))"
-                        + " previewProvider=\(item.previewProvider != nil)"
-                )
-            }
-
-            guard let preview else {
-                print("preview none")
-                return
-            }
-            print("preview size=\(preview.size) parameters=\(preview.parameters)")
-            print(
-                "target center=\(preview.target.center)"
-                    + " transform=\(preview.target.transform)"
-                    + " container=\(type(of: preview.target.container))"
-                    + " containerBounds=\(preview.target.container.bounds)"
-            )
-            logViewTree(preview.view, depth: 0)
-        }
-
-        // the scale may sit on a subview or a layer rather than the preview's own view
-        private func logViewTree(_ view: UIView, depth: Int) {
-            let indent = String(repeating: "  ", count: depth)
-            print(
-                "\(indent)\(type(of: view))"
-                    + " bounds=\(view.bounds) frame=\(view.frame) center=\(view.center)"
-                    + " transform=\(view.transform)"
-                    + " layerAffine=\(view.layer.affineTransform())"
-                    + " layer3D=\(view.layer.transform)"
-                    + " contentsScale=\(view.layer.contentsScale)"
-            )
-            for subview in view.subviews {
-                logViewTree(subview, depth: depth + 1)
-            }
-        }
-    #endif
 }
 
 // one feel for a placement settling into place, whether it arrives (a transition) or
