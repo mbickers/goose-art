@@ -40,15 +40,12 @@ private func lastEmojiInString(_ string: String) -> Emoji? {
 
 private typealias EmojiDropHandler = (
     _ emoji: Emoji,
-    // both in the drop view's points
+    // both in the drop view's coordinates
     _ itemPosition: CGPoint,
     _ itemHeight: CGFloat,
     _ itemRotation: CGFloat  // radians
 ) -> Void
 
-// a UIDropInteraction, not .dropDestination or .onDrop: only UIKit's drop preview reports
-// the size an emoji was dragged at. nothing public reports the pinch and rotation a sticker
-// drag applies — the preview's target, view, bounds, size and image are all untransformed
 private struct EmojiDropTarget: UIViewRepresentable {
     let onDrop: EmojiDropHandler
 
@@ -67,13 +64,11 @@ private struct EmojiDropTarget: UIViewRepresentable {
     }
 }
 
-// what iOS sizes the preview of a dragged emoji at
-private let unpreviewedDropHeight: CGFloat = 55
+private let defaultDroppedItemHeight: CGFloat = 55
 
 private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
     var onDrop: EmojiDropHandler
 
-    // UIKit offers the preview between performDrop and the item provider delivering
     private var droppedPreview: UITargetedDragPreview? = nil
     private var droppedTransform: CGAffineTransform = .identity
 
@@ -103,7 +98,7 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
         withDefault defaultPreview: UITargetedDragPreview
     ) -> UITargetedDragPreview? {
         droppedPreview = defaultPreview
-        droppedTransform = item.unsafeExtractSuggestedTransform() ?? .identity  // else upright
+        droppedTransform = item.unsafeExtractSuggestedTransform() ?? .identity
         // nil fades the preview out, handing off to the placement springing in
         return nil
     }
@@ -116,21 +111,22 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
         let location = session.location(in: view)
 
         _ = session.loadObjects(ofClass: String.self) { [weak self] strings in
-            guard let self, let emoji = strings.compactMap(lastEmojiInString).last
-            else { return }
+            guard let self else { return }
 
+            // cleared even when nothing lands, so the next drop can't read this one's
             let preview = self.droppedPreview
             let transform = self.droppedTransform
             self.droppedPreview = nil
             self.droppedTransform = .identity
 
-            // UIKit previews every visible item, so the fallbacks are near-unreachable
+            // if user tries to drop non-emoji string, just take last emoji
+            guard let emoji = strings.compactMap(lastEmojiInString).last else { return }
+
             self.onDrop(
                 emoji,
                 // a drag hangs off wherever it was grabbed, so the touch isn't the centre
                 preview?.target.center ?? location,
-                // the preview's size is what it was before the pinch
-                (preview?.size.height ?? unpreviewedDropHeight) * transform.scaleFactor(),
+                (preview?.size.height ?? defaultDroppedItemHeight) * transform.scaleFactor(),
                 transform.rotationAngle()
             )
         }
