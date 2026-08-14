@@ -123,9 +123,13 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
             let preview = self.droppedPreview
             self.droppedPreview = nil
 
+            // a preview's size is its view's untransformed bounds, so the pinch and
+            // rotation the user applied land on that view's own transform. the target's
+            // is a further one the drop animation may ask for, so the two compose.
             // UIKit offers a preview for every visible item, so one is all but assured;
             // an emoji still lands without it, just at a stock size and upright
-            let transform = preview?.target.transform ?? .identity
+            let transform = (preview?.view.transform ?? .identity)
+                .concatenating(preview?.target.transform ?? .identity)
             self.onDrop(
                 DroppedEmoji(
                     emoji: emoji,
