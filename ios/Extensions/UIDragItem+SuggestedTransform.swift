@@ -2,15 +2,10 @@ import ObjectiveC
 import UIKit
 
 extension UIDragItem {
-    // The pinch and rotation a user applies to a drag preview reach the drop in exactly one
-    // place: `__suggestedTransform`, a private ivar on the private `_UIDropItem` standing
-    // behind the item. No public API carries it.
-    //
-    // Unsafe twice over, hence the name. It reads private structure, so a shipped build
-    // would count as using private API; and it reads raw memory at an ivar offset, which is
-    // why it does so only once the ivar's own type encoding confirms a CGAffineTransform is
-    // what lives there. An iOS that renames, retypes or drops the ivar yields nil rather
-    // than a plausible-looking misreading of whatever took its place.
+    // the pinch and rotation a drag preview was given, which UIKit keeps to itself on the
+    // private _UIDropItem behind the item. unsafe twice over: private structure, so a
+    // shipped build counts as using private API, and a raw read at an ivar offset — hence
+    // the encoding check, so a renamed or retyped ivar yields nil rather than nonsense
     func unsafeExtractSuggestedTransform() -> CGAffineTransform? {
         guard
             let ivar = class_getInstanceVariable(

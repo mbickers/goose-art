@@ -123,6 +123,48 @@ struct Placement {
 The other reason to name one is **more than one use**: two call sites that must
 agree need a single definition, or they'll drift apart.
 
+## Keep a comment short, and attach it to what it explains
+
+A comment is for what the code can't say: a reason, a constraint, a fact from
+outside the file. It isn't a place to restate the code in prose, and it isn't
+where a paragraph goes to live. Say the thing and stop.
+
+A block above a call that explains three of its arguments in turn makes a reader
+hold all three at once and then match them back by position. Split it, and put
+each part on the argument it's about:
+
+```swift
+// bad — a paragraph to unpick and map back onto the call
+// the preview's own centre rather than the touch: a drag is carried by the point it
+// was grabbed at, so the finger sits off the glyph's centre by however far that was,
+// and dropping at it lands crooked. its size is what it was before the pinch, so the
+// size on screen is that put through the transform.
+onDrop(
+    emoji,
+    preview.target.center,
+    preview.size.height * transform.scaleFactor(),
+    transform.rotationAngle()
+)
+
+// good — each reason sits on the line it explains
+onDrop(
+    emoji,
+    // a drag hangs off wherever it was grabbed, so the touch isn't the centre
+    preview.target.center,
+    // the preview's size is what it was before the pinch
+    preview.size.height * transform.scaleFactor(),
+    transform.rotationAngle()
+)
+```
+
+The same holds for a type's properties and a function's parameters — a note about
+one of them belongs on it, and a unit or a caveat is often short enough to sit at
+the end of the line:
+
+```swift
+let baseRotation: CGFloat  // radians
+```
+
 ## Avoid ViewBuilder-style trailing closures for our own functions
 
 Trailing-closure syntax hides the parameter label, which is exactly the

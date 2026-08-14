@@ -38,27 +38,17 @@ private func lastEmojiInString(_ string: String) -> Emoji? {
     return string.compactMap { Emoji($0) }.last
 }
 
-// an emoji as it left the drag: where it landed, and the size and angle the user pinched
-// and rotated its preview to, in the canvas's own points
 private typealias EmojiDropHandler = (
     _ emoji: Emoji,
+    // both in the drop view's points
     _ itemPosition: CGPoint,
     _ itemHeight: CGFloat,
-    _ itemRotation: CGFloat
+    _ itemRotation: CGFloat  // radians
 ) -> Void
 
-// the canvas hosts a UIDropInteraction rather than using .dropDestination or .onDrop
-// because SwiftUI reports no size for what was dragged and UIKit's drop preview does.
-//
-// An emoji dragged off the keyboard arrives as a sticker, which is why it can be pinched
-// and rotated mid-drag. No public API reports that gesture. All of these are identity, or
-// untransformed bounds, on a drop whose preview was visibly resized: UITargetedDragPreview's
-// `target.transform`, `view.transform`, `view.bounds` and `size`; the sticker's own image is
-// the plain 160pt emoji bitmap either way; and UIDragDropSession exposes only `location(in:)`,
-// as do SwiftUI's DropSession and DropInfo. The preview's view is a `_UIDragSlotHostingView`,
-// an empty stand-in, because the live preview renders out of process.
-//
-// It survives in one place, which `UIDragItem.unsafeExtractSuggestedTransform()` reads.
+// a UIDropInteraction, not .dropDestination or .onDrop: only UIKit's drop preview reports
+// the size an emoji was dragged at. nothing public reports the pinch and rotation a sticker
+// drag applies — the preview's target, view, bounds, size and image are all untransformed
 private struct EmojiDropTarget: UIViewRepresentable {
     let onDrop: EmojiDropHandler
 
@@ -83,8 +73,7 @@ private let unpreviewedDropHeight: CGFloat = 55
 private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
     var onDrop: EmojiDropHandler
 
-    // UIKit offers the preview after performDrop but before the item provider delivers,
-    // so these are held here and read once the string finally arrives
+    // UIKit offers the preview between performDrop and the item provider delivering
     private var droppedPreview: UITargetedDragPreview? = nil
     private var droppedTransform: CGAffineTransform = .identity
 
@@ -99,9 +88,8 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
         return session.canLoadObjects(ofClass: String.self)
     }
 
-    // text dragged out of a field suggests .move, and a destination that proposes nothing
-    // back is refused with the grey forbidden badge. a drop here adds a placement, and
-    // must never edit the text it came from, so it is always a copy
+    // a drag suggesting .move is refused with a forbidden badge unless something is
+    // proposed back. a drop adds a placement and never edits its source, so: copy
     func dropInteraction(
         _ interaction: UIDropInteraction,
         sessionDidUpdate session: any UIDropSession
@@ -115,9 +103,8 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
         withDefault defaultPreview: UITargetedDragPreview
     ) -> UITargetedDragPreview? {
         droppedPreview = defaultPreview
-        // an emoji lands upright when the transform can't be had, as it did before it could
-        droppedTransform = item.unsafeExtractSuggestedTransform() ?? .identity
-        // nil fades the preview out in place, handing off to the placement springing in
+        droppedTransform = item.unsafeExtractSuggestedTransform() ?? .identity  // else upright
+        // nil fades the preview out, handing off to the placement springing in
         return nil
     }
 
@@ -137,15 +124,12 @@ private final class EmojiDropCoordinator: NSObject, UIDropInteractionDelegate {
             self.droppedPreview = nil
             self.droppedTransform = .identity
 
-            // the preview's own centre rather than the touch: a drag is carried by the
-            // point it was grabbed at, so the finger sits off the glyph's centre by
-            // however far that was, and dropping at it lands crooked. its size is what it
-            // was before the pinch, so the size on screen is that put through the
-            // transform. UIKit offers a preview for every visible item, so one is all but
-            // assured; an emoji still lands without it, at the touch and a stock size
+            // UIKit previews every visible item, so the fallbacks are near-unreachable
             self.onDrop(
                 emoji,
+                // a drag hangs off wherever it was grabbed, so the touch isn't the centre
                 preview?.target.center ?? location,
+                // the preview's size is what it was before the pinch
                 (preview?.size.height ?? unpreviewedDropHeight) * transform.scaleFactor(),
                 transform.rotationAngle()
             )
@@ -240,9 +224,8 @@ struct CanvasView: View {
         return makeDragGesture(source: .canvas, makePlacement: { _ in placement })
     }
 
-    // a drop reports the size and angle it was dragged at, so the emoji arrives as it
-    // looked under the finger. mirroring is the one thing a drag can't carry, and the
-    // button already covers it
+    // a drop reports the size and angle it was dragged at, so the emoji lands looking as
+    // it did under the finger
     private func dropEmoji(
         _ emoji: Emoji,
         itemPosition: CGPoint,
@@ -260,7 +243,7 @@ struct CanvasView: View {
                         to: Placement.scaleRange
                     ),
                     rotation: itemRotation,
-                    isMirrored: false,
+                    isMirrored: false,  // a drag can't carry it; the button covers it
                     id: UUID().uuidString
                 )
             )
@@ -475,10 +458,9 @@ struct CanvasView: View {
                         of: { geometry in geometry.frame(in: .global) },
                         action: { frame in canvasFrame = frame }
                     )
-                    // sits with .onGeometryChange, above the border's padding, so that a
-                    // drop's coordinates are the same space the glyphs are placed in. a
-                    // background rather than an overlay: SwiftUI hit-tests front to back,
-                    // so the glyphs above keep their own pickup gestures
+                    // sits with .onGeometryChange, above the border's padding, so a drop's
+                    // coordinates match the glyphs'. a background, not an overlay: SwiftUI
+                    // hit-tests front to back, so glyphs keep their pickup gestures
                     .background(EmojiDropTarget(onDrop: dropEmoji))
                     .modifier(RoundedBorder(cornerRadius: 20, lineWidth: 6))
                     .aspectRatio(1, contentMode: .fit)
