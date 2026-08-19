@@ -69,6 +69,7 @@ def empty_canvas() -> CanvasState:
 @dataclass(kw_only=True)
 class UpsertAction:
     placement: Placement
+    behind_id: str | None
 
 
 @dataclass(kw_only=True)
@@ -93,7 +94,11 @@ def action_from_json(data: dict[str, Any]) -> Action:
     action_type = data["type"]
 
     if action_type == "upsert":
-        return UpsertAction(placement=Placement.from_json(data["placement"]))
+        # clients before layer ordering send no behindId, meaning the top
+        return UpsertAction(
+            placement=Placement.from_json(data["placement"]),
+            behind_id=data.get("behindId"),
+        )
     elif action_type == "remove":
         return RemoveAction(placement_id=data["placementId"])
     elif action_type == "setTitle":
@@ -106,12 +111,16 @@ def action_from_json(data: dict[str, Any]) -> Action:
 
 def reduce_canvas(state: CanvasState, action: Action) -> CanvasState:
     match action:
-        case UpsertAction(placement=placement):
-            # an upserted placement moves to the top of the z-order
+        case UpsertAction(placement=placement, behind_id=behind_id):
+            # an upserted placement lands directly behind behind_id, or on top of
+            # the z-order when there is no such placement
+            others = [p for p in state.placements if p.id != placement.id]
+            index = next(
+                (i for i, p in enumerate(others) if p.id == behind_id), len(others)
+            )
             return CanvasState(
                 title=state.title,
-                placements=[p for p in state.placements if p.id != placement.id]
-                + [placement],
+                placements=others[:index] + [placement] + others[index:],
             )
         case RemoveAction(placement_id=placement_id):
             return CanvasState(

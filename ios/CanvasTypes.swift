@@ -118,11 +118,12 @@ enum CanvasAction: Codable {
     case clear
     case remove(placementId: String)
     case setTitle(title: String)
-    case upsert(placement: Placement)
+    case upsert(placement: Placement, behindId: String?)
 
     private enum CodingKeys: String, CodingKey {
         case type
         case placement
+        case behindId
         case placementId
         case title
     }
@@ -134,7 +135,9 @@ enum CanvasAction: Codable {
         switch type {
         case "upsert":
             let placement = try container.decode(Placement.self, forKey: .placement)
-            self = .upsert(placement: placement)
+            // clients before layer ordering send no behindId, meaning the top
+            let behindId = try container.decodeIfPresent(String.self, forKey: .behindId)
+            self = .upsert(placement: placement, behindId: behindId)
         case "remove":
             let placementId = try container.decode(String.self, forKey: .placementId)
             self = .remove(placementId: placementId)
@@ -156,9 +159,10 @@ enum CanvasAction: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
 
         switch self {
-        case .upsert(let placement):
+        case .upsert(let placement, let behindId):
             try container.encode("upsert", forKey: .type)
             try container.encode(placement, forKey: .placement)
+            try container.encodeIfPresent(behindId, forKey: .behindId)
         case .remove(let placementId):
             try container.encode("remove", forKey: .type)
             try container.encode(placementId, forKey: .placementId)
@@ -184,13 +188,18 @@ func reduceCanvas(state: CanvasState, action: CanvasAction) -> CanvasState {
         )
     case .setTitle(let title):
         return CanvasState(title: title, placements: state.placements)
-    case .upsert(let newPlacement):
-        // an upserted placement moves to the top of the z-order
+    case .upsert(let newPlacement, let behindId):
+        // an upserted placement lands directly behind behindId, or on top of the
+        // z-order when there is no such placement
+        let others = state.placements.filter { placement in
+            placement.id != newPlacement.id
+        }
+        let insertionIndex =
+            others.firstIndex { placement in placement.id == behindId } ?? others.count
         return CanvasState(
             title: state.title,
-            placements: state.placements.filter { placement in
-                placement.id != newPlacement.id
-            } + [newPlacement]
+            placements: Array(others[..<insertionIndex]) + [newPlacement]
+                + Array(others[insertionIndex...])
         )
     }
 }

@@ -16,12 +16,14 @@ private struct ActivePlacementState {
     let placement: Placement
     let secondTouchState: SecondTouchState?
     let source: Source
+    let behindId: String?
 
     func with(placement: Placement) -> ActivePlacementState {
         return ActivePlacementState(
             placement: placement,
             secondTouchState: secondTouchState,
-            source: source
+            source: source,
+            behindId: behindId
         )
     }
 
@@ -29,7 +31,17 @@ private struct ActivePlacementState {
         return ActivePlacementState(
             placement: placement,
             secondTouchState: secondTouchState,
-            source: source
+            source: source,
+            behindId: behindId
+        )
+    }
+
+    func with(behindId: String?) -> ActivePlacementState {
+        return ActivePlacementState(
+            placement: placement,
+            secondTouchState: secondTouchState,
+            source: source,
+            behindId: behindId
         )
     }
 }
@@ -178,7 +190,8 @@ struct CanvasView: View {
                 ?? ActivePlacementState(
                     placement: makePlacement(canvasPoint),
                     secondTouchState: nil,
-                    source: source
+                    source: source,
+                    behindId: nil
                 )
             self.activePlacementState = activePlacementState.with(
                 placement:
@@ -235,7 +248,8 @@ struct CanvasView: View {
                     rotation: itemRotation,
                     isMirrored: false,
                     id: UUID().uuidString
-                )
+                ),
+                behindId: nil
             )
         )
         recentEmojisStore.emojiUsed(emoji)
@@ -247,10 +261,14 @@ struct CanvasView: View {
 
         switch (state.source, state.placement.hasValidPosition) {
         case (.palette, true):
-            canvasService.apply(.upsert(placement: state.placement))
+            canvasService.apply(
+                .upsert(placement: state.placement, behindId: state.behindId)
+            )
             recentEmojisStore.emojiUsed(state.placement.emoji)
         case (.canvas, true):
-            canvasService.apply(.upsert(placement: state.placement))
+            canvasService.apply(
+                .upsert(placement: state.placement, behindId: state.behindId)
+            )
         case (.canvas, false):
             canvasService.apply(.remove(placementId: state.placement.id))
         case (.palette, false):
@@ -324,6 +342,18 @@ struct CanvasView: View {
                 secondTouchState: nil
             )
         }
+    }
+
+    private func nextBehindIdCyclingUpwards(
+        behindId: String?,
+        draggedPlacementId: String
+    ) -> String? {
+        let otherIdsFromBottom = canvasService.state.placements
+            .map(\.id)
+            .filter { $0 != draggedPlacementId }
+        guard let behindId else { return otherIdsFromBottom.first }
+        guard let index = otherIdsFromBottom.firstIndex(of: behindId) else { return nil }
+        return otherIdsFromBottom.dropFirst(index + 1).first
     }
 
     private var titleTextField: some View {
@@ -484,6 +514,20 @@ struct CanvasView: View {
                                 activePlacementState = dragState.with(
                                     placement: dragState.placement.with(
                                         isMirrored: !dragState.placement.isMirrored
+                                    )
+                                )
+                            }
+                        }
+
+                        CustomButton(
+                            content: .icon(systemName: "square.3.layers.3d"),
+                            enabled: activePlacementState != nil
+                        ) {
+                            if let dragState = activePlacementState {
+                                activePlacementState = dragState.with(
+                                    behindId: nextBehindIdCyclingUpwards(
+                                        behindId: dragState.behindId,
+                                        draggedPlacementId: dragState.placement.id
                                     )
                                 )
                             }
