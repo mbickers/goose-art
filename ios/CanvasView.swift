@@ -160,17 +160,30 @@ struct CanvasView: View {
     @FocusState private var titleFieldFocused: Bool
 
     @State private var activePlacementState: ActivePlacementState? = nil
+    @State private var dragScreenPoint: CGPoint? = nil
     @State private var canvasFrame: CGRect? = nil
+    @State private var scrollPosition = ScrollPosition()
+    @State private var scrollOffset: CGFloat = 0
     @State private var showingSettings = false
     @AppStorage(MessageSound.enabledDefaultsKey) private var soundEffectsEnabled = true
 
     // two coordinate systems meet here: screen points, which is what gestures report in
     // the .global space, and canvas points, the unit square a Placement is stored in
+    private func toCanvasPoint(screenPoint: CGPoint, canvasFrame: CGRect) -> CGPoint {
+        return (screenPoint - canvasFrame.origin).safeDivide(canvasFrame.width)
+    }
+
     private func toCanvasPoint(screenPoint: CGPoint) -> CGPoint? {
         guard let canvasFrame else { return nil }
-        return (screenPoint - canvasFrame.origin).safeDivide(
-            canvasFrame.width
-        )
+        return toCanvasPoint(screenPoint: screenPoint, canvasFrame: canvasFrame)
+    }
+
+    // the scroll view starts at the top of the screen, so this band is the top of the
+    // viewport: a drag held inside it scrolls the page up, letting an emoji dragged from
+    // the palette reach a canvas that is scrolled off screen
+    private var dragIsInAutoScrollBand: Bool {
+        guard let dragScreenPoint else { return false }
+        return dragScreenPoint.y < 140
     }
 
     private func makeDragGesture(
@@ -185,6 +198,7 @@ struct CanvasView: View {
             guard
                 let canvasPoint = toCanvasPoint(screenPoint: value.location)
             else { return }
+            dragScreenPoint = value.location
             let activePlacementState =
                 activePlacementState
                 ?? ActivePlacementState(
@@ -258,6 +272,7 @@ struct CanvasView: View {
     private func dropActivePlacement() {
         guard let state = activePlacementState else { return }
         activePlacementState = nil
+        dragScreenPoint = nil
 
         switch (state.source, state.placement.hasValidPosition) {
         case (.palette, true):
@@ -490,7 +505,21 @@ struct CanvasView: View {
                     .onGeometryChange(
                         for: CGRect.self,
                         of: { geometry in geometry.frame(in: .global) },
-                        action: { frame in canvasFrame = frame }
+                        action: { frame in
+                            canvasFrame = frame
+                            // the page scrolls while a drag is held, moving the canvas
+                            // under a finger that has not itself moved
+                            if let dragScreenPoint, let dragState = activePlacementState {
+                                activePlacementState = dragState.with(
+                                    placement: dragState.placement.with(
+                                        position: toCanvasPoint(
+                                            screenPoint: dragScreenPoint,
+                                            canvasFrame: frame
+                                        )
+                                    )
+                                )
+                            }
+                        }
                     )
                     // sits with .onGeometryChange, above the border's padding, so a drop's
                     // coordinates match the glyphs'. a background, not an overlay: SwiftUI
@@ -558,7 +587,25 @@ struct CanvasView: View {
                     }
                 }.padding()
             }
+            .scrollPosition($scrollPosition)
             .scrollDisabled(activePlacementState != nil)
+            .onScrollGeometryChange(
+                for: CGFloat.self,
+                of: { geometry in geometry.contentOffset.y },
+                action: { _, offset in scrollOffset = offset }
+            )
+            // the offset is advanced locally rather than re-read each tick: user
+            // scrolling is disabled for the length of the drag, so this is its only
+            // source of movement
+            .task(id: dragIsInAutoScrollBand) {
+                guard dragIsInAutoScrollBand else { return }
+                var offset = scrollOffset
+                while !Task.isCancelled, offset > 0 {
+                    offset = max(0, offset - 12)
+                    scrollPosition.scrollTo(y: offset)
+                    try? await Task.sleep(for: .milliseconds(16))
+                }
+            }
 
             if let dragState = activePlacementState, let canvasFrame {
                 placementGlyph(dragState.placement, canvasFrame: canvasFrame)
