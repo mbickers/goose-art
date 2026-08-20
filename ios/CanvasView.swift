@@ -590,9 +590,7 @@ struct CanvasView: View {
             }
             .scrollDisabled(activePlacementState != nil)
 
-            if let dragState = activePlacementState, let canvasFrame,
-                !dragState.placement.hasValidPosition
-            {
+            if let dragState = activePlacementState, let canvasFrame {
                 placementGlyph(dragState.placement, canvasFrame: canvasFrame)
                     .position(
                         dragState.placement.position * canvasFrame.height
