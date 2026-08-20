@@ -162,6 +162,7 @@ struct CanvasView: View {
     @State private var activePlacementState: ActivePlacementState? = nil
     @State private var canvasFrame: CGRect? = nil
     @State private var showingSettings = false
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage(MessageSound.enabledDefaultsKey) private var soundEffectsEnabled = true
 
     // two coordinate systems meet here: screen points, which is what gestures report in
@@ -273,6 +274,15 @@ struct CanvasView: View {
             canvasService.apply(.remove(placementId: state.placement.id))
         case (.palette, false):
             break
+        }
+    }
+
+    private func discardActivePlacement() {
+        guard let state = activePlacementState else { return }
+        activePlacementState = nil
+
+        if case .canvas = state.source {
+            canvasService.apply(.remove(placementId: state.placement.id))
         }
     }
 
@@ -596,6 +606,11 @@ struct CanvasView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Palette.purple)
+        .onChange(of: scenePhase) { _, newScenePhase in
+            if newScenePhase == .background {
+                discardActivePlacement()
+            }
+        }
         .confirmationDialog("Settings", isPresented: $showingSettings) {
             Button("Clear", role: .destructive) {
                 canvasService.apply(.clear)
