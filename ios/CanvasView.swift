@@ -346,14 +346,19 @@ struct CanvasView: View {
 
     private func nextBehindIdCyclingUpwards(
         behindId: String?,
-        draggedPlacementId: String
+        draggedPlacement: Placement
     ) -> String? {
-        let otherIdsFromBottom = canvasService.state.placements
+        let overlappingIdsFromBottom = canvasService.state.placements
+            .filter { placement in
+                placement.id != draggedPlacement.id
+                    && placement.boundingCircleOverlaps(draggedPlacement)
+            }
             .map(\.id)
-            .filter { $0 != draggedPlacementId }
-        guard let behindId else { return otherIdsFromBottom.first }
-        guard let index = otherIdsFromBottom.firstIndex(of: behindId) else { return nil }
-        return otherIdsFromBottom.dropFirst(index + 1).first
+        guard let behindId else { return overlappingIdsFromBottom.first }
+        guard let index = overlappingIdsFromBottom.firstIndex(of: behindId) else {
+            return nil
+        }
+        return overlappingIdsFromBottom.dropFirst(index + 1).first
     }
 
     private var titleTextField: some View {
@@ -425,6 +430,24 @@ struct CanvasView: View {
         }
     }
 
+    private var placementsAsIfDroppedNow: [Placement] {
+        guard let dragState = activePlacementState else {
+            return canvasService.state.placements
+        }
+        guard dragState.placement.hasValidPosition else {
+            return canvasService.state.placements.filter { placement in
+                placement.id != dragState.placement.id
+            }
+        }
+        return reduceCanvas(
+            state: canvasService.state,
+            action: .upsert(
+                placement: dragState.placement,
+                behindId: dragState.behindId
+            )
+        ).placements
+    }
+
     // positioning is left to the caller so that gestures can be attached before
     // .position, which otherwise expands to fill the whole canvas
     private func placementGlyph(_ placement: Placement, canvasFrame: CGRect) -> some View {
@@ -451,17 +474,14 @@ struct CanvasView: View {
 
                         if let canvasFrame {
                             ForEach(
-                                canvasService.state.placements,
+                                placementsAsIfDroppedNow,
                                 id: \.id
                             ) {
                                 placement in
-                                let placementIsBeingDragged =
-                                    activePlacementState?.placement.id == placement.id
                                 placementGlyph(placement, canvasFrame: canvasFrame)
                                     .gesture(
                                         makePickupGesture(placement: placement)
                                     )
-                                    .opacity(placementIsBeingDragged ? 0.1 : 1)
                                     .transition(
                                         AnyTransition.scale(scale: 1.25).combined(with: .opacity)
                                     )
@@ -527,7 +547,7 @@ struct CanvasView: View {
                                 activePlacementState = dragState.with(
                                     behindId: nextBehindIdCyclingUpwards(
                                         behindId: dragState.behindId,
-                                        draggedPlacementId: dragState.placement.id
+                                        draggedPlacement: dragState.placement
                                     )
                                 )
                             }
@@ -560,13 +580,15 @@ struct CanvasView: View {
             }
             .scrollDisabled(activePlacementState != nil)
 
-            if let dragState = activePlacementState, let canvasFrame {
+            if let dragState = activePlacementState, let canvasFrame,
+                !dragState.placement.hasValidPosition
+            {
                 placementGlyph(dragState.placement, canvasFrame: canvasFrame)
                     .position(
                         dragState.placement.position * canvasFrame.height
                             + canvasFrame.origin
                     )
-                    .opacity(dragState.placement.hasValidPosition ? 0.8 : 0.5)
+                    .opacity(0.5)
                     // ignores safe area so that status bar and dynamic island to impact placement
                     .ignoresSafeArea()
                     .allowsHitTesting(false)

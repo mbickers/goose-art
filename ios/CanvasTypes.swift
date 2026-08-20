@@ -54,6 +54,10 @@ struct Placement: Codable, Equatable {
         return CGRect(x: 0, y: 0, width: 1, height: 1).contains(position)
     }
 
+    func boundingCircleOverlaps(_ other: Placement) -> Bool {
+        return (position - other.position).norm() < (scale + other.scale) / 2
+    }
+
     func with(
         position: CGPoint? = nil,
         scale: CGFloat? = nil,
