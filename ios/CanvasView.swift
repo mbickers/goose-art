@@ -154,7 +154,7 @@ struct CanvasView: View {
     @State private var recentEmojisStore = RecentEmojiService()
 
     @State private var emojiFieldValue: String = ""
-    @FocusState private var emojiFieldFocused: Bool
+    @State private var emojiFieldFocused: Bool = false
 
     @State private var titleFieldValue: String = ""
     @FocusState private var titleFieldFocused: Bool
@@ -412,9 +412,7 @@ struct CanvasView: View {
                     .foregroundColor(Palette.darkPurple.opacity(0.5))
             }
 
-            TextField("", text: $emojiFieldValue)
-                .focused($emojiFieldFocused)
-                .multilineTextAlignment(.center)
+            EmojiKeyboardTextField(text: $emojiFieldValue, isFocused: $emojiFieldFocused)
                 .onChange(of: emojiFieldValue) {
                     oldValue,
                     newValue
@@ -619,6 +617,7 @@ struct CanvasView: View {
             }
             .scrollPosition($scrollPosition)
             .scrollDisabled(activePlacementState != nil)
+            .scrollDismissesKeyboard(.immediately)
             .onScrollGeometryChange(
                 for: CGFloat.self,
                 of: { geometry in geometry.contentOffset.y },
