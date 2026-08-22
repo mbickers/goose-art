@@ -457,11 +457,6 @@ struct CanvasView: View {
         guard let dragState = activePlacementState else {
             return canvasService.state.placements
         }
-        guard dragState.placement.hasValidPosition else {
-            return canvasService.state.placements.filter { placement in
-                placement.id != dragState.placement.id
-            }
-        }
         return reduceCanvas(
             state: canvasService.state,
             action: .upsert(
@@ -505,6 +500,10 @@ struct CanvasView: View {
                                     .gesture(
                                         makePickupGesture(placement: placement)
                                     )
+                                    // the glyph carries the gesture driving its own
+                                    // drag, so removing it from the ForEach would
+                                    // cancel the touch mid-drag
+                                    .opacity(placement.hasValidPosition ? 1 : 0)
                                     .transition(
                                         AnyTransition.scale(scale: 1.25).combined(with: .opacity)
                                     )
