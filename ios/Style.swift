@@ -70,12 +70,14 @@ extension Text {
 }
 
 struct EmojiButton: ViewModifier {
+    static let glyphSize: CGFloat = 40
+
     let color: Color
     let dimmed: Bool
 
     func body(content: Content) -> some View {
         content
-            .font(.rounded(size: 40))
+            .font(.rounded(size: EmojiButton.glyphSize))
             .frame(width: 60, height: 60)
             .modifier(ButtonSurface(color: color, dimmed: dimmed))
     }
