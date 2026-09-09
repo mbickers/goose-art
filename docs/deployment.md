@@ -4,16 +4,20 @@ The server and the app ship separately; neither waits on the other.
 
 ## Server
 
+The server has the repo checked out at `~/goose-art` and runs as a systemd user
+service. Deploy by hand:
+
 ```sh
-server/deploy.sh
+cd ~/goose-art
+git pull
+mise run prod-install
 ```
 
-Only git-tracked files are transferred, so an uncommitted change will not go out,
-and anything untracked on the droplet survives — which is what keeps the APNs key
-and the user token store in place across deploys.
+Only committed work is deployed, and untracked files on the server are left
+alone, which is what keeps the APNs key and the user token store in place.
 
 Saved canvases are untracked too, so a change to the format they are written in
-has to be migrated on the droplet by hand after the deploy that changed it.
+has to be migrated on the server by hand after the deploy that changed it.
 
 ## App
 

@@ -81,8 +81,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# untracked so that tokens stay out of the repo, and so that deploy.sh (which only
-# rsyncs git-tracked files) leaves the deployed copy alone
+# untracked so that tokens stay out of the repo, and so that a deploy leaves the
+# copy on the server alone
 user_tokens_path = Path(__file__).parent / "user_tokens.json"
 
 

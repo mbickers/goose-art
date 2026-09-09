@@ -8,15 +8,15 @@ list without a sound or waking the screen.
 
 ## Setup (one time, by hand)
 
-None of this is in the repo — the signing key is a secret, and `deploy.sh`
-rsyncs only git-tracked files, so the droplet's copies survive deploys the same
-way `user_tokens.json` does.
+None of this is in the repo, since the signing key is a secret. A deploy only
+pulls tracked files, so the server's copies survive it the same way
+`user_tokens.json` does.
 
 1. In the Apple Developer portal, enable the Push Notifications capability for
    the App ID `com.maxbickers.goose-art`, create an APNs auth key, and download
    the `.p8`.
-2. Place the key on the droplet at `/opt/goose-art/apns_key.p8`, alongside
-   `/opt/goose-art/apns_config.json`:
+2. Place the key on the server at `~/goose-art/server/apns_key.p8`, alongside
+   `~/goose-art/server/apns_config.json`:
 
 ```json
 {

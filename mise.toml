@@ -1,0 +1,16 @@
+[settings]
+task.source_freshness_hash_contents = true
+
+[tasks.prod-install]
+run = '''
+test "$PWD" = "$HOME/goose-art" || {
+  echo "prod-install must run from $HOME/goose-art" >&2
+  exit 1
+}
+uv sync --frozen --project server
+install -D -m 644 server/goose-art.service "$HOME/.config/systemd/user/goose-art.service"
+systemctl --user daemon-reload
+systemctl --user enable goose-art.service
+systemctl --user restart goose-art.service
+systemctl --user is-active --quiet goose-art.service
+'''
