@@ -64,7 +64,9 @@ class AuthenticationService {
         self.baseURL = baseURL
         // a stored session is trusted without asking the server, so the app still opens
         // with its local canvas offline. a revoked one is caught by the websocket 403
-        if let session = SessionStore.load() {
+        if baseURL == nil {
+            startSession(Session(token: UUID().uuidString, userId: "offline"))
+        } else if let session = SessionStore.load() {
             startSession(session)
         }
     }
@@ -98,7 +100,9 @@ class AuthenticationService {
     private func startSession(_ session: Session) {
         let token = session.token
         canvasConnection?.disconnect()
-        SessionStore.save(session)
+        if baseURL != nil {
+            SessionStore.save(session)
+        }
 
         let connection = baseURL.map { baseURL in
             AuthenticatedWebSocket<ServerMessage<CanvasState>, ClientMessage<CanvasAction>>(
@@ -155,7 +159,9 @@ class AuthenticationService {
     func logout(reason: String? = nil) {
         canvasConnection?.disconnect()
         canvasConnection = nil
-        SessionStore.clear()
+        if baseURL != nil {
+            SessionStore.clear()
+        }
         state = .unauthenticated(reason: reason)
     }
 

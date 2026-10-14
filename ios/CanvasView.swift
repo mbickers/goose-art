@@ -58,11 +58,18 @@ private typealias EmojiDropHandler = (
     _ itemRotation: CGFloat
 ) -> Void
 
+private final class EmojiDropView: UIView {
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        // Pass touch events through so canvas glyphs keep their gestures.
+        return event?.type != .touches && super.point(inside: point, with: event)
+    }
+}
+
 private struct EmojiDropTarget: UIViewRepresentable {
     let onDrop: EmojiDropHandler
 
     func makeUIView(context: Context) -> UIView {
-        let view = UIView()
+        let view = EmojiDropView()
         view.addInteraction(UIDropInteraction(delegate: context.coordinator))
         return view
     }
@@ -470,6 +477,7 @@ struct CanvasView: View {
     // .position, which otherwise expands to fill the whole canvas
     private func placementGlyph(_ placement: Placement, canvasFrame: CGRect) -> some View {
         Text(placement.emoji.stringValue)
+            .accessibilityIdentifier("placement-\(placement.emoji.stringValue)")
             .font(.rounded(size: canvasFrame.height * placement.scale))
             // the canvas proposes less width than the full-screen drag preview,
             // so without this a large glyph gets a narrower frame in one than
@@ -548,10 +556,8 @@ struct CanvasView: View {
                             }
                         }
                     )
-                    // sits with .onGeometryChange, above the border's padding, so a drop's
-                    // coordinates match the glyphs'. a background, not an overlay: SwiftUI
-                    // hit-tests front to back, so glyphs keep their pickup gestures
-                    .background(EmojiDropTarget(onDrop: dropEmoji))
+                    // Above the border's padding so drop coordinates match the glyphs.
+                    .overlay(EmojiDropTarget(onDrop: dropEmoji))
                     .modifier(RoundedBorder(cornerRadius: 20, lineWidth: 6))
                     .aspectRatio(1, contentMode: .fit)
                     .frame(maxWidth: .infinity, maxHeight: 500)
@@ -606,6 +612,7 @@ struct CanvasView: View {
                         ForEach(recentEmojisStore.recentEmojis, id: \.self) {
                             emoji in
                             Text(emoji.stringValue)
+                                .accessibilityIdentifier("recent-\(emoji.stringValue)")
                                 .gesture(
                                     makePaletteDragGesture(emoji: emoji)
                                 )

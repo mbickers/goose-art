@@ -8,10 +8,14 @@ struct GooseArtApp: App {
 
     @Environment(\.scenePhase) private var scenePhase
 
-    @State private var authenticationService = AuthenticationService(
-        // nil to work offline, or URL(string: "http://localhost:8000") for a local server
-        baseURL: URL(string: "https://goose-art.maxbickers.com")
-    )
+    @State private var authenticationService = {
+        #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--ui-test") {
+                return AuthenticationService(baseURL: nil)
+            }
+        #endif
+        return AuthenticationService(baseURL: URL(string: "https://goose-art.maxbickers.com"))
+    }()
 
     var body: some Scene {
         WindowGroup {
