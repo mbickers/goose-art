@@ -9,7 +9,12 @@
 /* Begin PBXFileReference section */
 		506A682E2F301A8300FB37AD /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		50CB95B02F1C23DF005BDAE0 /* goose-art.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "goose-art.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA0000000000000000000001 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = GooseArtUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		AA000000000000000000000C = {isa = PBXFileSystemSynchronizedBuildFileExceptionSet; membershipExceptions = (Tests/EmojiDragTests.swift); target = 50CB95AF2F1C23DF005BDAE0; };
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		506A6C372F301A8300FB37AD /* server */ = {
@@ -19,9 +24,11 @@
 		};
 		50CB95B22F1C23DF005BDAE0 /* ios */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (AA000000000000000000000C);
 			path = ios;
 			sourceTree = "<group>";
 		};
+		AA0000000000000000000002 = {isa = PBXFileSystemSynchronizedRootGroup; path = ios/Tests; sourceTree = SOURCE_ROOT; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -32,6 +39,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA0000000000000000000005 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -49,6 +57,7 @@
 			isa = PBXGroup;
 			children = (
 				50CB95B02F1C23DF005BDAE0 /* goose-art.app */,
+				AA0000000000000000000001,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -78,7 +87,11 @@
 			productReference = 50CB95B02F1C23DF005BDAE0 /* goose-art.app */;
 			productType = "com.apple.product-type.application";
 		};
+		AA0000000000000000000003 = {isa = PBXNativeTarget; buildConfigurationList = AA0000000000000000000007; buildPhases = (AA0000000000000000000004, AA0000000000000000000005, AA0000000000000000000006); buildRules = (); dependencies = (AA000000000000000000000A); fileSystemSynchronizedGroups = (AA0000000000000000000002); name = GooseArtUITests; productName = GooseArtUITests; productReference = AA0000000000000000000001; productType = "com.apple.product-type.bundle.ui-testing"; };
 /* End PBXNativeTarget section */
+		AA000000000000000000000B = {isa = PBXContainerItemProxy; containerPortal = 50CB95A82F1C23DE005BDAE0; proxyType = 1; remoteGlobalIDString = 50CB95AF2F1C23DF005BDAE0; remoteInfo = "goose-art"; };
+		AA000000000000000000000A = {isa = PBXTargetDependency; target = 50CB95AF2F1C23DF005BDAE0; targetProxy = AA000000000000000000000B; };
+
 
 /* Begin PBXProject section */
 		50CB95A82F1C23DE005BDAE0 /* Project object */ = {
@@ -107,6 +120,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				AA0000000000000000000003,
 				50CB95AF2F1C23DF005BDAE0 /* goose-art */,
 			);
 		};
@@ -120,6 +134,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA0000000000000000000006 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -130,6 +145,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA0000000000000000000004 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
@@ -324,6 +340,8 @@
 			};
 			name = Release;
 		};
+		AA0000000000000000000008 = {isa = XCBuildConfiguration; name = Debug; buildSettings = {GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = "com.maxbickers.goose-art.uitests"; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; TEST_TARGET_NAME = "goose-art"; }; };
+		AA0000000000000000000009 = {isa = XCBuildConfiguration; name = Release; buildSettings = {GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = "com.maxbickers.goose-art.uitests"; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; TEST_TARGET_NAME = "goose-art"; }; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -345,6 +363,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		AA0000000000000000000007 = {isa = XCConfigurationList; buildConfigurations = (AA0000000000000000000008, AA0000000000000000000009); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 	};
 	rootObject = 50CB95A82F1C23DE005BDAE0 /* Project object */;

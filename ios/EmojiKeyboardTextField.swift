@@ -49,6 +49,7 @@ struct EmojiKeyboardTextField: UIViewRepresentable {
 
     func makeUIView(context: Context) -> UITextField {
         let textField = EmojiInputTextField()
+        textField.accessibilityIdentifier = "emoji-picker"
         textField.delegate = context.coordinator
         textField.textAlignment = .center
         textField.returnKeyType = .done
